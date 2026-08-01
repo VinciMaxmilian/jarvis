@@ -1,0 +1,125 @@
+# ============================================================================ #
+# ESTE ARQUIVO NÃO É LIDO POR NINGUÉM EM RUNTIME. É a ESPECIFICAÇÃO das rotas
+# que o dashboard do Cloudflare tem de conter — a fonte de verdade versionada
+# contra a qual o estado remoto é conferido.
+#
+# Sucede o antigo `config.yml` (túnel locally-managed), que foi APOSENTADO.
+# O histórico e o racional completo estão em infrastructure/README.md §8.1.
+# O arquivo antigo continua legível em
+# `git show 76a5800:infrastructure/cloudflared/config.yml`.
+# ============================================================================ #
+#
+# ## Por que deixou de ser configuração e virou espécie de "contrato"
+#
+# O túnel em uso (JARVIS_TUNNEL) foi criado no dashboard e roda por TOKEN
+# (remotely-managed), como serviço do Windows no host. Nesse modo o cloudflared
+# IGNORA o ingress de qualquer config.yml local: os argumentos que o
+# `service install <token>` grava são exatamente
+#
+#     tunnel run --token-file %PROGRAMDATA%\cloudflared\token
+#
+# (verificado em cmd/cloudflared/windows_service.go + common_service.go, funções
+# `installWindowsService`, `writeTokenToConfigDir`, `buildArgsForTokenFile`), e a
+# configuração que vale chega da borda em runtime, por
+# `orchestration.Orchestrator.UpdateConfig`, que SUBSTITUI o ingress carregado
+# localmente. Um config.yml versionado, nesse cenário, não é configuração: é uma
+# mentira que compila.
+#
+# O que ele ainda pode ser — e é isto aqui — é o registro revisável da tabela de
+# roteamento. O dono escolheu o dashboard; a contrapartida honesta é que a ordem
+# das regras deixou de aparecer no `git diff`. Este arquivo devolve metade disso:
+# a intenção fica versionada, e a DIVERGÊNCIA entre intenção e dashboard vira
+# detectável (comando de conferência no §8.7 do README).
+#
+# ## Semântica de casamento — verificada no código-fonte, não na prosa da doc
+#
+# `ingress/rule.go`, func (r *Rule) Matches:
+#
+#     pathMatch := r.Path == nil || r.Path.Regexp == nil || r.Path.Regexp.MatchString(path)
+#     return (hostMatch || punycodeHostMatch) && pathMatch
+#
+# `MatchString` do Go casa em QUALQUER POSIÇÃO da string — não é ancorado. Por
+# isso `^/api` precisa do `^`: sem ele, `/qualquer/coisa/api` cairia na API.
+#
+# `ingress/ingress.go`, func FindMatchingRule: itera as regras e retorna na
+# PRIMEIRA que casa (`if rule.Matches(hostname, path) { return &rule, ... }`).
+# A validação exige que a última regra case tudo ("The last ingress rule must
+# match all URLs"). Ou seja: ordem importa, primeira vitória, catch-all no fim.
+# Isso vale igual para o ingress montado a partir do dashboard.
+#
+# ## Origens: loopback DO HOST, não nomes de serviço do Compose
+#
+# O conector roda no Windows, FORA do Docker. Dentro da rede do Compose `api` e
+# `web` resolvem; do host, NÃO. O que existe do host são as portas publicadas em
+# 127.0.0.1 (infrastructure/docker/docker-compose.yml, seção `ports`, e
+# README §5). Apontar para `http://api:8000` aqui daria 502 permanente.
+
+ingress:
+  # ------------------------------------------------------------------------- #
+  # 1. API. TEM de vir ANTES do catch-all.
+  #
+  #    Cobre também o WebSocket do chat, que é /api/chat/ws
+  #    (apps/api/main.py: include_router(chat.router, prefix="/api/chat");
+  #     apps/api/routers/chat.py: @router.websocket("/ws")).
+  #    WebSocket não pede chave nenhuma: o cloudflared faz proxy de Upgrade
+  #    nativamente.
+  #
+  #    O `(/|$)` evita que um futuro `/apiary` seja capturado por engano.
+  #
+  #    Vai DIRETO em 127.0.0.1:8000 em vez de deixar o proxy do Vite repassar:
+  #    tira um salto do streaming e sobrevive à troca do dev server por um
+  #    servidor estático de produção, que não tem proxy nenhum.
+  # ------------------------------------------------------------------------- #
+  - hostname: ia.atmosintelli.com.br
+    path: ^/api(/|$)
+    service: http://127.0.0.1:8000
+
+  # ------------------------------------------------------------------------- #
+  # 2. Todo o resto do host: o PWA. Path VAZIO (casa tudo).
+  #
+  #    Se esta regra subir para o primeiro lugar, /api/chat/ws vai para o Vite,
+  #    que responde 200 com o index.html em vez de abrir o WebSocket. O chat
+  #    "carrega" e nunca conecta — falha silenciosa, cara de achar. É o único
+  #    erro de configuração desta lista que não produz mensagem de erro.
+  #
+  #    httpHostHeader NÃO é cosmético: o Vite valida o header Host contra
+  #    `server.allowedHosts` (defesa contra DNS rebinding) e responde
+  #    "Blocked request. This host is not allowed." a host desconhecido.
+  #    Chegando "ia.atmosintelli.com.br", o dev server recusaria TUDO.
+  #    No dashboard isto é o campo "HTTP Host Header", em
+  #    Additional application settings → HTTP Settings.
+  #    Ref.: https://vite.dev/config/server-options (server.allowedHosts)
+  # ------------------------------------------------------------------------- #
+  - hostname: ia.atmosintelli.com.br
+    service: http://127.0.0.1:5173
+    originRequest:
+      httpHostHeader: localhost:5173
+
+  # ------------------------------------------------------------------------- #
+  # 3. Catch-all. No dashboard ele é IMPLÍCITO — a Cloudflare acrescenta um
+  #    `http_status:404` no fim e não o mostra na lista de rotas. Fica escrito
+  #    aqui para o contrato ficar completo: qualquer hostname que não seja o
+  #    nosso morre com 404 em vez de vazar para dentro da stack.
+  # ------------------------------------------------------------------------- #
+  - service: http_status:404
+
+# --------------------------------------------------------------------------- #
+# Defesa em profundidade, OPCIONAL: exigir o JWT do Access no próprio conector,
+# antes de proxiar. Com isto, mesmo que a verificação na origem
+# (CF_ACCESS_AUD / CF_ACCESS_TEAM_DOMAIN, em packages/shared/settings.py) esteja
+# desligada, request sem token do Access não chega à origem.
+#
+# No dashboard: Additional application settings → Access → "Protect with Access"
+# (campos Team Name e Application Audience (AUD) Tag). Equivale ao bloco YAML:
+#
+#     originRequest:
+#       access:
+#         required: true
+#         teamName: <team>            # o mesmo de CF_ACCESS_TEAM_DOMAIN
+#         audTag:
+#           - <Application Audience (AUD) Tag>  # o mesmo de CF_ACCESS_AUD
+#
+# Nenhum dos dois é segredo: o audTag viaja dentro do próprio JWT.
+# Precisa ser marcado nas DUAS rotas — marcar só numa deixa a outra aberta.
+# Ref.: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/
+# --------------------------------------------------------------------------- #

@@ -1,0 +1,19 @@
+-e .
+
+# Dependências (espelhadas do pyproject.toml)
+fastapi
+uvicorn[standard]
+pydantic>=2
+pydantic-settings
+sqlalchemy[asyncio]>=2
+asyncpg
+psycopg[binary]
+alembic
+httpx
+structlog
+anthropic
+python-multipart
+websockets
+jsonschema
+pyyaml
+openai

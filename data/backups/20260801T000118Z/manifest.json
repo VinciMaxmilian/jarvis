@@ -1,0 +1,15 @@
+{
+  "manifest_version": 1,
+  "backup_id": "20260801T000118Z",
+  "created_at": "2026-08-01T00:01:18.852709Z",
+  "database": "jarvis",
+  "postgres_format": "custom",
+  "postgres": {
+    "path": "postgres.dump",
+    "bytes": 14020,
+    "sha256": "2b14746437a9a155c4e5fd84f5ec4c43ad43ad4f3a483ed0448856ce79016c53",
+    "files": 1
+  },
+  "lancedb": null,
+  "tool_version": "/usr/lib/postgresql/16/bin/pg_dump"
+}

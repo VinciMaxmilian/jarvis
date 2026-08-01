@@ -1,0 +1,121 @@
+name: exemplo_nas
+version: 0.1.0
+description: Lista e grava arquivos numa pasta do NAS de casa.
+status: pending_approval
+approved_commit: null
+entrypoint: capabilities.exemplo_nas.backend.handlers:main
+runtime: python
+permissions:
+  network:
+  - 192.168.1.50
+  filesystem:
+  - /mnt/nas/documentos
+  process: false
+tools:
+- name: nas_gravar
+  description: Grava um arquivo de texto na pasta do NAS.
+  input_schema:
+    properties:
+      nome:
+        description: Nome do arquivo, relativo à raiz concedida.
+        maxLength: 255
+        minLength: 1
+        title: Nome
+        type: string
+      conteudo:
+        description: Conteúdo em texto UTF-8.
+        title: Conteudo
+        type: string
+    required:
+    - nome
+    - conteudo
+    title: GravarEntrada
+    type: object
+  output_schema:
+    properties:
+      caminho:
+        title: Caminho
+        type: string
+      bytes:
+        title: Bytes
+        type: integer
+    required:
+    - caminho
+    - bytes
+    title: GravarSaida
+    type: object
+  idempotent: false
+  requires_approval: false
+- name: nas_listar
+  description: Lista os arquivos de uma pasta do NAS, sem entrar em subpastas.
+  input_schema:
+    properties:
+      subcaminho:
+        default: ''
+        description: Pasta dentro da raiz concedida. Vazio lista a própria raiz.
+        maxLength: 255
+        title: Subcaminho
+        type: string
+    title: ListarEntrada
+    type: object
+  output_schema:
+    $defs:
+      ArquivoInfo:
+        description: Uma entrada da listagem. `bytes` é o tamanho em disco.
+        properties:
+          nome:
+            title: Nome
+            type: string
+          bytes:
+            title: Bytes
+            type: integer
+        required:
+        - nome
+        - bytes
+        title: ArquivoInfo
+        type: object
+    properties:
+      arquivos:
+        items:
+          $ref: '#/$defs/ArquivoInfo'
+        title: Arquivos
+        type: array
+      total:
+        default: 0
+        title: Total
+        type: integer
+    title: ListarSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+- name: nas_status
+  description: Confere se o NAS responde na porta de compartilhamento.
+  input_schema:
+    description: Sem argumento. O modelo existe para a tool ter schema como todas as outras.
+    properties: {}
+    title: StatusEntrada
+    type: object
+  output_schema:
+    properties:
+      host:
+        title: Host
+        type: string
+      porta:
+        title: Porta
+        type: integer
+      online:
+        title: Online
+        type: boolean
+    required:
+    - host
+    - porta
+    - online
+    title: StatusSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+dependencies: []
+trigger_intent:
+- listar arquivos do NAS
+- gravar arquivo no NAS
+- conferir se o NAS responde

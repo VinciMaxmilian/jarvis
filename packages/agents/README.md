@@ -1,0 +1,3 @@
+# README para o pacote de Agentes
+# Este pacote deve conter a lógica dos agentes (Chief AI, Planner, etc.)
+# ... documentação inicial do módulo de agentes ...

@@ -1,0 +1,355 @@
+# Stack completa: postgres + redis + migrate + api + orchestrator + web.
+# Mais um serviço atrás de profile: `test` (runner).
+# Sem a chave `version:` — obsoleta na Compose Spec (D4).
+# O `.env` da raiz é a única fonte de credenciais (D7); versionado só o `.env.example`.
+#
+# Rode da RAIZ do repositório (o --env-file é o que faz o ${...} abaixo enxergar o .env da raiz):
+#   docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
+#
+# NÃO HÁ SERVIÇO DE INFERÊNCIA AQUI, de propósito. O provider default é o
+# `lmstudio`: um servidor OpenAI-compatible que roda FORA do Docker, na LAN
+# (LMSTUDIO_BASE_URL no .env). O Ollama continua suportado pelo código como
+# ÚLTIMO RECURSO e também fora do Docker — ver infrastructure/README.md §4.
+# Motivo: modelo de vários GB dentro de volume Docker, com passthrough de GPU,
+# custa muito mais do que apontar uma URL para um runtime que já roda no host.
+#
+# Runbook completo (migrations, primeiro boot, troubleshooting): infrastructure/README.md
+
+name: jarvis
+
+services:
+  postgres:
+    image: postgres:16-alpine # D8: era 14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Locale estável entre máquinas (casa <-> trabalho).
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      # D5: publicado só no loopback. Nunca 0.0.0.0 — sem porta aberta na LAN.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # D6: a API só sobe depois que o banco aceita conexão.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine # D8: era 6
+    restart: unless-stopped
+    # appendonly: persistência exigida pelos Streams (event bus, v2).
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # --------------------------------------------------------------------------- #
+  # migrate — aplica o schema e MORRE. Roda antes de api e orchestrator, que
+  # esperam por `service_completed_successfully`.
+  #
+  # Por que existe: o aceite da v0 (plan.md §14) é "`docker compose up` sobe tudo
+  # sem intervenção manual". Antes disto, um `up` numa base nova entregava schema
+  # vazio e uma API que quebrava no primeiro request até alguém lembrar de rodar
+  # `exec api alembic upgrade head` à mão. Isso é intervenção manual.
+  #
+  # Por que serviço separado e não ENTRYPOINT da api: com dois processos Python
+  # (api e orchestrator) subindo juntos, migrar no entrypoint faria os dois
+  # correrem `alembic upgrade` ao mesmo tempo na mesma base. Um serviço one-shot
+  # dá exatamente uma execução, e a falha dele barra os dois em vez de deixar um
+  # subir contra schema meio aplicado.
+  # --------------------------------------------------------------------------- #
+  migrate:
+    build:
+      # Mesma imagem da api: mesmo Dockerfile, mesmo cache de camada, nenhum build
+      # extra. O que muda é só o comando.
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      # Explícito porque o Dockerfile tem um estágio `test` DEPOIS do runtime, e
+      # o default do Docker é o último estágio do arquivo.
+      target: runtime
+    # tarefa de uma vez: reiniciar depois de concluir é loop, não resiliência.
+    restart: "no"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      # O Alembic usa o DSN síncrono derivado deste (Settings.sync_database_url).
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      # Mesmo bind mount de api e orchestrator, e pelo mesmo motivo: sem ele o
+      # serviço rodaria as migrations congeladas na imagem, e uma migration nova
+      # (autogenerate escreve em apps/api/alembic/versions/ no host) só seria
+      # aplicada depois de um `up --build`. Silencioso e caro de descobrir.
+      - ../..:/app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      # Contexto é a raiz do monorepo: o Dockerfile instala pelo pyproject.toml da raiz.
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      # Ver o comentário do `migrate`: o último estágio do Dockerfile é `test`.
+      target: runtime
+    restart: unless-stopped
+    env_file:
+      # required: false para o compose não morrer na leitura quando o .env ainda
+      # não existe (permite `config`/`up postgres redis` numa clonagem nova). O
+      # fail-fast de configuração continua onde ele mora de verdade: Settings, em
+      # packages/shared/settings.py, derruba a app se faltar variável obrigatória.
+      - path: ../../.env
+        required: false
+    environment:
+      # Dentro da rede do Compose o host é o nome do serviço, não 127.0.0.1.
+      # Sobrescreve o valor do .env, que é escrito para uso a partir do host.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      # LMSTUDIO_BASE_URL vem do .env sem sobrescrita: é IP de LAN, igual visto do
+      # host e de dentro do container. Só precisa de tradução o que aponta para
+      # 127.0.0.1 — daí o Ollama (opcional, no host) virar host.docker.internal.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      API_HOST: 0.0.0.0
+      # bind mount de disco Windows não entrega evento de inotify; sem polling o
+      # --reload abaixo simplesmente nunca dispara.
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Volume de código para dev: editar no host reflete no container (--reload).
+      - ../..:/app
+    # DEV: acrescenta --reload ao CMD de produção do Dockerfile. --reload-dir
+    # restringe o watcher aos diretórios de código — sem isso o watchfiles varre
+    # graphify-out e apps/web em polling, e num i5-3470 isso é CPU constante.
+    command:
+      - uvicorn
+      - apps.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - apps/api
+      - --reload-dir
+      - packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    extra_hosts:
+      # Rota para runtime de inferência instalado NO HOST (Ollama como último
+      # recurso, KoboldCpp). Dentro do container, 127.0.0.1 é o próprio container.
+      - "host.docker.internal:host-gateway"
+
+  orchestrator:
+    build:
+      context: ../..
+      dockerfile: orchestrator/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    volumes:
+      - ../..:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # --------------------------------------------------------------------------- #
+  # web (PWA React 19 + Vite) — DEV, dev server com HMR. No caminho default.
+  #
+  # Fica sem profile para o aceite da v0 continuar verdadeiro: `docker compose
+  # up -d` sobe o sistema inteiro, PWA incluído, sem flag extra.
+  #
+  # O proxy do Vite lê VITE_PROXY_TARGET (apps/web/vite.config.ts) em vez de
+  # fixar 127.0.0.1:8000, que dentro do container apontaria para o próprio web.
+  #
+  # ESTE SERVIÇO NÃO É O QUE VAI PARA A INTERNET. Ver `web-prod` abaixo.
+  # --------------------------------------------------------------------------- #
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    restart: unless-stopped
+    ports:
+      # D5: loopback, igual ao resto.
+      - "127.0.0.1:5173:5173"
+    volumes:
+      # Bind mount do código para HMR, e por cima um volume ANÔNIMO em
+      # node_modules: sem ele, um host sem node_modules apagaria o da imagem, e
+      # um host COM node_modules injetaria binário nativo de Windows num
+      # container Linux (esbuild e rollup são por plataforma).
+      - ../../apps/web:/app/apps/web
+      - /app/apps/web/node_modules
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+      # Bind mount de disco Windows não emite inotify; sem polling o HMR nunca
+      # dispara — mesmo motivo do WATCHFILES_FORCE_POLLING da api.
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      api:
+        # service_healthy, não service_started: a imagem da api tem HEALTHCHECK de
+        # verdade (GET /health). Sem isso o PWA sobe e faz proxy para uma porta
+        # que ainda não escuta, e o primeiro carregamento falha no boot frio.
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------- #
+  # web-prod (PWA buildado + nginx) — ESTE é o que o Cloudflare Tunnel publica.
+  #
+  # Atrás do profile `prod`:
+  #   docker compose -f infrastructure/docker/docker-compose.yml --env-file .env \
+  #     --profile prod up -d web-prod
+  #
+  # POR QUE EXISTE: até a v1.5 o túnel apontava para a porta do dev server do
+  # Vite. Publicar um dev server na internet entrega HMR sobre WebSocket, source
+  # maps, o middleware de transformação de módulo e um bundle não otimizado — a
+  # superfície inteira de uma ferramenta de desenvolvimento, num host que o
+  # Access protege mas não esconde. O estágio `prod` do Dockerfile serve o build
+  # estático com nginx e não tem nenhuma dessas coisas.
+  #
+  # POR QUE PORTA 5174 E NÃO 5173 — é a decisão de desenho desta seção.
+  # Se dev e prod dividissem a 5173, "o que o túnel publica" passaria a depender
+  # de qual container pegou a porta primeiro, e isso NÃO é observável de fora: o
+  # PWA renderiza igual nos dois. Portas distintas tornam a exposição
+  # determinística — 5174 é sempre o build de produção — e trocam uma falha
+  # silenciosa (o mundo vendo o dev server) por uma falha barulhenta (502 na
+  # borda quando o profile `prod` não está de pé). Também deixa os dois modos
+  # rodarem lado a lado para comparação.
+  #
+  # CONSEQUÊNCIA NO DASHBOARD: a rota do PWA aponta para 127.0.0.1:5174, não
+  # :5173. Ver infrastructure/README.md §8.3 e cloudflared/ingress.expected.yml.
+  # --------------------------------------------------------------------------- #
+  web-prod:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      target: prod
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      # D5 continua valendo, e aqui ele é o aceite duro da v1.5: loopback. O
+      # alcance externo vem do conector do Tunnel, que abre conexão de dentro
+      # para fora. Publicar em 0.0.0.0 aqui destrói o aceite.
+      - "127.0.0.1:5174:5173"
+    # Sem bind mount, de propósito: a imagem carrega o build congelado. Mudou o
+    # front, é `--build` de novo — que é exatamente a garantia que se quer de um
+    # artefato de produção.
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Confirma que o nginx está servindo o SPA de verdade, não só que a porta
+      # abriu. O `-f` faz o wget falhar em status >= 400.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # --------------------------------------------------------------------------- #
+  # cloudflared — APOSENTADO DESTE COMPOSE. Não existe mais serviço de túnel aqui.
+  #
+  # O túnel (JARVIS_TUNNEL) roda como SERVIÇO DO WINDOWS no host, por token
+  # (remotely-managed), instalado com `cloudflared.exe service install <token>`.
+  # O passo a passo, as rotas exatas do dashboard e o racional completo da
+  # decisão estão em infrastructure/README.md §8.
+  #
+  # Por que o serviço saiu daqui, em uma linha cada:
+  #
+  #   1. INCOMPATIBILIDADE REAL, não preferência. O serviço abaixo rodava
+  #      `tunnel run <UUID>` com credentials-file — o modo locally-managed. O
+  #      JARVIS_TUNNEL foi criado no dashboard e é remotely-managed: rodando por
+  #      token, o cloudflared IGNORA o ingress do config.yml e aplica o que a
+  #      borda empurra (orchestration.UpdateConfig). O config.yml versionado
+  #      viraria documentação falsa de um roteamento que não é o que roda.
+  #   2. ORIGENS DIFERENTES. Do host, `api:8000` e `web:5173` não resolvem — o
+  #      DNS do Compose só existe dentro da rede do Compose. O conector no host
+  #      alcança 127.0.0.1:8000 e 127.0.0.1:5173, as portas publicadas abaixo.
+  #   3. DOIS CONECTORES NO MESMO TÚNEL É ARMADILHA. Se este serviço subisse
+  #      junto com o do Windows, os dois virariam réplicas do mesmo túnel, e a
+  #      Cloudflare escolhe entre réplicas pela proximidade geográfica, sem
+  #      garantia de qual. Ver README §8.6.
+  #   4. O serviço do Windows sobrevive a reboot e não depende de o Docker
+  #      Desktop ter subido — o que, para um túnel, é a diferença entre "o
+  #      sistema está no ar" e "o sistema está no ar quando eu lembro".
+  #
+  # O que NÃO mudou e continua valendo: nenhuma porta nova, nada em 0.0.0.0. O
+  # aceite da v1.5 é "zero porta aberta no roteador, verificado de fora da rede";
+  # o conector abre conexão DE DENTRO para a borda e o tráfego desce por ela.
+  # Publicar qualquer coisa em 0.0.0.0 aqui destrói o aceite, com ou sem Docker.
+  #
+  # Para reviver o caminho Docker (só faz sentido com um túnel DIFERENTE, criado
+  # com `cloudflared tunnel create`, e com o serviço do Windows desinstalado):
+  # `git show 76a5800:infrastructure/docker/docker-compose.yml` traz o serviço
+  # inteiro, e `git show 76a5800:infrastructure/cloudflared/config.yml` traz as
+  # regras locally-managed que ele consumia.
+  # --------------------------------------------------------------------------- #
+
+  # --------------------------------------------------------------------------- #
+  # test — pytest, mypy, ruff e black. Atrás do profile `test`, porque é
+  # ferramenta, não parte do sistema: um `up` não deve subir um runner de teste.
+  #
+  #   docker compose -f infrastructure/docker/docker-compose.yml --env-file .env \
+  #     --profile test run --rm test
+  #   ...e para trocar o comando:
+  #     ... run --rm test mypy packages/
+  #     ... run --rm test ruff check .
+  #
+  # `run --rm`, não `up`: o container existe para rodar uma vez e devolver o
+  # código de saída — é ele que diz se o aceite passou.
+  #
+  # Não depende de postgres: a suíte de hoje é toda em memória (conftest.py traz
+  # InMemoryGoalStore e FakeLLMProvider). Quando entrar teste de integração com
+  # banco, entra aqui um depends_on em postgres/service_healthy.
+  # --------------------------------------------------------------------------- #
+  test:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      target: test
+    profiles: ["test"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      # DSN de fachada: `Settings` exige DATABASE_URL no formato async e derruba
+      # o import se faltar. Nenhum teste conecta — se um dia conectar, este valor
+      # falha rápido e visível em vez de acertar um banco de verdade por acidente.
+      DATABASE_URL: postgresql+asyncpg://test:test@postgres:5432/test
+      TAVILY_API_KEY: tvly-test
+    volumes:
+      # Repo inteiro: a suíte vive em tests/, que não entra na imagem.
+      - ../..:/app
+
+volumes:
+  pgdata:
+  redisdata:

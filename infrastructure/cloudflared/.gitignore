@@ -1,0 +1,18 @@
+# O que este diretório versiona é `ingress.expected.yml` — a ESPECIFICAÇÃO das
+# rotas que o dashboard tem de conter (o túnel é remotely-managed; ver
+# infrastructure/README.md §8.1). Nada mais.
+#
+# Fora daqui, sempre: o TOKEN do túnel, o JSON de credenciais e o cert.pem do
+# `cloudflared tunnel login`. Quem tiver qualquer um deles roda o túnel como se
+# fosse esta máquina — e um túnel rodando é uma porta para dentro da rede.
+#
+# O token do serviço do Windows vive em %PROGRAMDATA%\cloudflared\token, gravado
+# pelo próprio `cloudflared.exe service install <token>` com permissão 0600.
+# Esse caminho é FORA do repositório de propósito; não copie o arquivo para cá.
+#
+# Estes ignores existem como rede de segurança para o acidente, não como
+# permissão para guardar segredo em repositório.
+credentials.json
+token
+*.json
+*.pem

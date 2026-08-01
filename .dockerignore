@@ -1,0 +1,74 @@
+# Contexto de build enxuto.
+#
+# O contexto das três imagens é a RAIZ do monorepo (`context: ../..` no compose),
+# então este arquivo é o único .dockerignore que vale para api, orchestrator e web.
+# Cada byte daqui é enviado ao daemon a cada build: num i5-3470 (pré-AVX2) isso é
+# tempo de CPU e de disco, não detalhe estético.
+#
+# Regra: só sai daqui o que a imagem realmente precisa em runtime.
+# Em dev nada disso dói, porque o compose monta o repo inteiro como volume.
+
+# --- segredo: NUNCA dentro de uma imagem (D7) ------------------------------- #
+# O contrato é `env_file`/`environment` no compose. Uma imagem com .env dentro
+# vaza a credencial para qualquer um que der `docker save`.
+.env
+.env.*
+!.env.example
+
+# --- git e metadados do repositório ---------------------------------------- #
+.git
+.gitignore
+.gitattributes
+.github
+.claude
+.editorconfig
+
+# --- Python: ambientes, bytecode e caches de ferramenta -------------------- #
+# __pycache__ do host é de outra plataforma/versão e só serve para confundir.
+.venv
+venv
+env
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node: node_modules é reinstalado dentro da imagem --------------------- #
+# Copiar o do host quebra binário nativo (esbuild/rollup são por plataforma).
+node_modules/
+**/node_modules/
+apps/web/dist/
+apps/web/.vite/
+npm-debug.log*
+
+# --- estado durável e artefatos grandes ------------------------------------ #
+# Estado vive em volume nomeado, não na imagem (LanceDB, dumps, uploads).
+data/
+# graphify-out tem ~3,3 MB de grafo gerado. Só o endpoint /brain.html o usa e em
+# dev ele chega pelo volume; a imagem não precisa carregar isso.
+graphify-out/
+graphify/
+# binário do KoboldCpp (centenas de MB) — roda nativo no Windows, nunca em imagem.
+ai/
+tools/
+
+# --- documentação e infra: não são runtime -------------------------------- #
+*.md
+docs/
+infrastructure/
+
+# --- editor / SO ----------------------------------------------------------- #
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.swp

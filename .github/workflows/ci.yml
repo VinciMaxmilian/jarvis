@@ -1,0 +1,75 @@
+# CI adiantada: tools.md (1.8) marca GitHub Actions como v1. Este arquivo já existe
+# para o pipeline nascer junto com o código, mas na v0 nada aqui é bloqueante —
+# o gate real continua sendo `pytest` verde na máquina do dono.
+#
+# Desligado até a v1:
+#   - `mypy` e `pytest` rodam com continue-on-error: a v0 ainda está sendo escrita
+#     e passo vermelho por módulo inexistente não é sinal útil;
+#   - E2E do PWA com Playwright (v2) e testes de capability em dry_run (v1) não existem;
+#   - nenhuma branch protection depende deste workflow ainda.
+# Na v1: remover os `continue-on-error` e exigir verde para merge.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    services:
+      # Postgres efêmero: migrations e testes rodam contra banco real, nunca sqlite.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: jarvis
+          POSTGRES_PASSWORD: jarvis
+          POSTGRES_DB: jarvis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jarvis -d jarvis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@127.0.0.1:5432/jarvis
+      REDIS_URL: redis://127.0.0.1:6379/0
+      # Valores falsos: a CI não fala com provider externo. Tool de verdade só em dry_run.
+      ANTHROPIC_API_KEY: ci-dummy
+      TAVILY_API_KEY: ci-dummy
+      ENVIRONMENT: dev
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -e ".[dev]"
+
+      - name: ruff
+        run: ruff check .
+
+      - name: black
+        run: black --check .
+
+      - name: mypy
+        run: mypy
+        continue-on-error: true # v1: tornar bloqueante
+
+      - name: Migrations (alembic upgrade head)
+        run: alembic upgrade head
+        continue-on-error: true # v1: tornar bloqueante
+
+      - name: pytest
+        run: pytest
+        continue-on-error: true # v1: tornar bloqueante

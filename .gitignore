@@ -1,0 +1,244 @@
+# ==========================================================
+# Jarvis — AI Operating System
+# Monorepo: Python/FastAPI + React/Vite + SwiftUI + Docker
+# ==========================================================
+
+# ----------------------------------------------------------
+# Segredos e credenciais  (NUNCA commitar)
+# ----------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+!**/public*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+service-account*.json
+
+# Cloudflare Tunnel
+.cloudflared/
+cert.pem
+*.tunnel.json
+
+# Chaves de API dos provedores de LLM / busca
+.anthropic
+.openai
+.tavily
+
+# ----------------------------------------------------------
+# Python  (api, orchestrator, worker, packages/*)
+# ----------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Empacotamento
+build/
+dist/
+*.egg-info/
+*.egg
+sdist/
+wheels/
+share/python-wheels/
+MANIFEST
+
+# Ferramentas (ruff, black, mypy, pytest)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# uv / pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ATENÇÃO: as migrations do Alembic (versions/*.py) SÃO versionadas.
+# Não adicione regra para "versions/".
+
+# ----------------------------------------------------------
+# Node / Frontend  (apps/web — React 19 + Vite + TS)
+# ----------------------------------------------------------
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+
+# Builds do Vite
+.vite/
+*.local
+
+# Cache de bundlers / monorepo
+.turbo/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Logs de package managers
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ----------------------------------------------------------
+# Playwright (testes E2E)
+# ----------------------------------------------------------
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
+
+# ----------------------------------------------------------
+# iOS / SwiftUI  (app mobile)
+# ----------------------------------------------------------
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/
+.build/
+# NÃO adicione "Packages/" (dir legado do SwiftPM): no Windows o Git é
+# case-insensitive e a regra casaria com packages/, ignorando o workspace inteiro.
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ----------------------------------------------------------
+# Modelos de IA  (GGUF, embeddings, pesos — arquivos enormes)
+# ----------------------------------------------------------
+models/
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.bin
+
+# KoboldCpp
+koboldcpp*
+*.kcpps
+
+# ----------------------------------------------------------
+# Bancos de dados e dados locais
+# ----------------------------------------------------------
+# LanceDB (embeddings / RAG)
+lancedb/
+.lancedb/
+*.lance
+
+# SQLite local
+*.db
+*.sqlite
+*.sqlite3
+
+# Volumes e dados de containers (postgres, redis, prometheus, grafana)
+infrastructure/docker/data/
+infrastructure/**/data/
+pgdata/
+redis-data/
+grafana-data/
+prometheus-data/
+
+# Dumps de banco
+*.dump
+*.sql.gz
+
+# ----------------------------------------------------------
+# Uploads, cache e arquivos processados em runtime
+# ----------------------------------------------------------
+uploads/
+storage/
+tmp/
+temp/
+.cache/
+converted/
+
+# ----------------------------------------------------------
+# Logs
+# ----------------------------------------------------------
+logs/
+*.log
+
+# ----------------------------------------------------------
+# Graphify (knowledge graph)
+# ----------------------------------------------------------
+# graphify-out/ É versionado de propósito: o time inteiro começa com o mapa
+# pronto. Só o custo local e o cache ficam de fora.
+graphify-out/cost.json
+graphify-out/cache/
+# Caminhos absolutos desta máquina — quebram o sync casa <-> trabalho.
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+
+# Clone do código-fonte do graphify (repo git aninhado — a instalação
+# funcional veio do PyPI). Remova esta linha se deletar a pasta.
+/graphify/
+
+# ----------------------------------------------------------
+# Claude Code
+# ----------------------------------------------------------
+# .claude/ (skills, hooks, CLAUDE.md) é versionado e compartilhado.
+# Apenas as configurações locais da máquina ficam de fora.
+.claude/settings.local.json
+
+# ----------------------------------------------------------
+# Editores e IDEs
+# ----------------------------------------------------------
+.idea/
+*.swp
+*.swo
+*~
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# ----------------------------------------------------------
+# Sistema operacional
+# ----------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.fuse_hidden*
+.Trash-*
