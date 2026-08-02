@@ -109,6 +109,21 @@ def _bare_model(model: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def _strip_unsupported_schema(schema: Any) -> Any:
+    """O Gemini (v1beta) não suporta 'additionalProperties' em functionDeclarations.
+    Remove recursivamente essas chaves do JSON Schema para evitar HTTP 400.
+    """
+    if isinstance(schema, dict):
+        return {
+            k: _strip_unsupported_schema(v)
+            for k, v in schema.items()
+            if k != "additionalProperties"
+        }
+    if isinstance(schema, list):
+        return [_strip_unsupported_schema(item) for item in schema]
+    return schema
+
+
 def _to_gemini_tools(tools: list[ToolSpec]) -> list[dict[str, Any]]:
     """ToolSpec → `tools[].functionDeclarations[]`, reusando o JSON Schema do MCP.
 
@@ -121,7 +136,7 @@ def _to_gemini_tools(tools: list[ToolSpec]) -> list[dict[str, Any]]:
                 {
                     "name": t.name,
                     "description": t.description,
-                    "parameters": t.input_schema,
+                    "parameters": _strip_unsupported_schema(t.input_schema),
                 }
                 for t in tools
             ]

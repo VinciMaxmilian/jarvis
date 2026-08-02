@@ -1,53 +1,40 @@
-import { useEffect, useState } from 'react'
+import { NeuralMap } from '../components/NeuralMap/NeuralMap'
 import { getApiBase } from '../config'
+import { useTheme } from '../contexts/ThemeContext'
 
 export default function MemoryPage() {
-  const [htmlContent, setHtmlContent] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const apiBase = getApiBase()
-    fetch(`${apiBase}/api/memory/memory.html`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to load memory graph')
-        return res.json()
-      })
-      .then(data => {
-        if (data.html) {
-          setHtmlContent(data.html)
-        } else {
-          throw new Error('Invalid response format')
-        }
-      })
-      .catch(err => {
-        console.error(err)
-        setError(err.message)
-      })
-  }, [])
+  const { theme } = useTheme()
+  const apiBase = getApiBase()
   
-  if (error) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--red)' }}>
-        Error loading memory: {error}
-      </div>
-    )
-  }
-
-  if (!htmlContent) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--ink-3)' }}>
-        Loading memory graph...
-      </div>
-    )
-  }
-
   return (
-    <div style={{ width: '100%', height: '100%' }}>
-      <iframe 
-        srcDoc={htmlContent} 
-        style={{ width: '100%', height: '100%', border: 'none' }} 
-        title="Memory Visualization"
-      />
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '12px 20px',
+        borderBottom: '1px solid hsl(var(--border-dim))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <span className="mono glow-text" style={{
+          color: 'hsl(var(--neon-cyan))',
+          fontSize: 12,
+          letterSpacing: '0.1em',
+        }}>MEMORY GRAPH</span>
+        <span className="mono" style={{
+          color: 'hsl(var(--text-muted))',
+          fontSize: 10,
+        }}>LONG TERM STORAGE</span>
+      </div>
+
+      {/* NeuralMap embed */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <NeuralMap url={`${apiBase}/api/memory/graph.json`} theme={theme} />
+      </div>
     </div>
   )
 }

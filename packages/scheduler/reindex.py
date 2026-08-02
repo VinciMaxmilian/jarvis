@@ -81,7 +81,7 @@ class ReindexService:
             anterior = indexados.get(doc_id)
             if anterior is None:
                 novos.append(documento)
-            elif anterior.sha256 != documento.sha256:
+            elif anterior.content_hash != documento.sha256:
                 alterados.append(documento)
 
         removidos = sorted(set(indexados) - set(no_disco))

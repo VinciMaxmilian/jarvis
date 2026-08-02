@@ -82,15 +82,16 @@ export const LOBES = [
 
 /* graph.json tem 1.5 MB. Uma única busca+parse compartilhada por todas as
  * montagens (ChatPage usa o mapa como fundo, BrainPage em primeiro plano). */
-let graphPromise: Promise<any> | null = null;
+const graphPromises = new Map<string, Promise<any>>();
 export function loadGraph(url = '/graph.json'): Promise<any> {
-  if (!graphPromise) {
-    graphPromise = fetch(url).then(r => r.json()).catch(err => {
-      graphPromise = null;
+  if (!graphPromises.has(url)) {
+    const promise = fetch(url).then(r => r.json()).catch(err => {
+      graphPromises.delete(url);
       throw err;
     });
+    graphPromises.set(url, promise);
   }
-  return graphPromise;
+  return graphPromises.get(url)!;
 }
 
 /* Quantização em raiz quadrada: os alfas úteis se concentram embaixo (0.04 no
@@ -155,6 +156,7 @@ export class NeuralEngine {
   public hover: GraphNode | null = null;
   public sel: GraphNode | null = null;
   public matched: Set<string> | null = null;
+  private lobes: any[] = [];
 
   private _backgroundMode = false;
   public get backgroundMode() { return this._backgroundMode; }
@@ -168,7 +170,7 @@ export class NeuralEngine {
       this.pitch = -0.22;
       this.zoom = 1;
     }
-    this.resize(); // DPR menor no modo fundo
+    this.resize();
   }
 
   public onHover?: (n: GraphNode | null, x: number, y: number) => void;
@@ -204,7 +206,6 @@ export class NeuralEngine {
     this.ro.observe(canvas);
     this.resize();
 
-    // Só desenha e gasta CPU quando o canvas está de fato na tela.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pause();
       else if (this.visible_) this.start();
@@ -224,7 +225,7 @@ export class NeuralEngine {
     this.pause();
     this.ro?.disconnect();
     this.io?.disconnect();
-    this.ac.abort(); // derruba os listeners de canvas e document de uma vez
+    this.ac.abort();
     this.sprites.clear();
     this.textW.clear();
     this.nodes = [];
@@ -249,6 +250,19 @@ export class NeuralEngine {
     if (opt.spin !== undefined) this.spin = opt.spin;
     if (opt.showAreas !== undefined) { this.showAreas = opt.showAreas; this.alpha = Math.max(this.alpha, 0.5); }
     if (opt.showEdges !== undefined) this.showEdges = opt.showEdges;
+    this.wake();
+  }
+
+  public setTheme(theme: Theme) {
+    this.th = THEME[theme];
+    this.grayLevel = this.th.pal.map(h => {
+      const [r, g, b] = hex2rgb(h);
+      return 0.299 * r + 0.587 * g + 0.114 * b;
+    });
+    this.palRgb = this.th.pal.map(h => hex2rgb(h).join(','));
+    this.bgGrad = null;
+    this.sprites.clear();
+    this.wake();
   }
 
   public selectNode(n: GraphNode | null) {
@@ -281,7 +295,8 @@ export class NeuralEngine {
   }
 
   private initData(GRAPH: any) {
-    const getLobe = (path: string) => LOBES.find(l => path.includes(l.p)) || { p: "", x: 0, y: 0, z: 0, n: "Core" };
+    this.lobes = GRAPH.lobes || LOBES;
+    const getLobe = (path: string) => this.lobes.find(l => path.includes(l.p)) || { p: "", x: 0, y: 0, z: 0, n: "Core" };
     const pal = this.th.pal;
 
     this.nodes = (GRAPH.nodes || []).map((n: any) => {
@@ -331,12 +346,26 @@ export class NeuralEngine {
       const sf = n.source_file || "";
       let hit = false;
       if (sf) {
-        const win = sf.replace(/\//g, '\\');
-        for (const p of paths) {
-          if (p.includes(sf) || p.includes(win) || sf.includes(p)) { hit = true; break; }
+        const s = sf.toLowerCase().replace(/\\/g, '/');
+        for (const raw of paths) {
+          const p = raw.toLowerCase().replace(/\\/g, '/');
+          if (p.includes(s) || s.includes(p)) { hit = true; break; }
         }
       }
       n.act = hit;
+    }
+    // Acende também os nós vizinhos diretamente conectados
+    const toActivate = new Set<GraphNode>();
+    for (const n of this.nodes) {
+      if (n.act) {
+        toActivate.add(n);
+        for (const edge of this.nbr.get(n.id) || []) {
+          toActivate.add(edge.n);
+        }
+      }
+    }
+    for (const n of toActivate) {
+      n.act = true;
     }
   }
 
@@ -582,13 +611,15 @@ export class NeuralEngine {
 
     ctx.clearRect(0, 0, W, H);
 
-    if (!this.bgGrad) {
-      const g = ctx.createRadialGradient(W / 2, H * 0.48, 0, W / 2, H * 0.48, Math.max(W, H) * 0.62);
-      g.addColorStop(0, th.bg[0]); g.addColorStop(0.55, th.bg[1]); g.addColorStop(1, th.bg[2]);
-      this.bgGrad = g;
+    if (!bg) {
+      if (!this.bgGrad) {
+        const g = ctx.createRadialGradient(W / 2, H * 0.48, 0, W / 2, H * 0.48, Math.max(W, H) * 0.62);
+        g.addColorStop(0, th.bg[0]); g.addColorStop(0.55, th.bg[1]); g.addColorStop(1, th.bg[2]);
+        this.bgGrad = g;
+      }
+      ctx.fillStyle = this.bgGrad;
+      ctx.fillRect(0, 0, W, H);
     }
-    ctx.fillStyle = this.bgGrad;
-    ctx.fillRect(0, 0, W, H);
 
     ctx.save();
     ctx.translate(W / 2, H * 0.48);
@@ -619,9 +650,11 @@ export class NeuralEngine {
     const probe = { x: 0, y: 0, z: 0, sx: 0, sy: 0, sc: 0, dz: 0 };
     const list: { sx: number, sy: number, sc: number, dz: number, i: number, n: string }[] = [];
 
-    for (let i = 0; i < LOBES.length; i++) {
-      const l = LOBES[i];
-      if (l.x === 0 && l.y === 0 && l.z === 0 && l.n !== "Agents" && l.n !== "Intelligence (LLM)" && l.n !== "Shared") continue;
+    for (let i = 0; i < this.lobes.length; i++) {
+      const l = this.lobes[i];
+      // Só ignora se for (0,0,0) estrito E não tiver o nome de um dos núcleos principais conhecidos
+      if (l.x === 0 && l.y === 0 && l.z === 0 && !["Agents", "Intelligence (LLM)", "Shared"].includes(l.n) && this.lobes === LOBES) continue;
+      
       probe.x = l.x; probe.y = l.y; probe.z = l.z;
       this.project(probe);
       if (probe.sc <= 0.05) continue;

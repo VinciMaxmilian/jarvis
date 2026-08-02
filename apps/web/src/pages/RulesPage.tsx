@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getApiBase } from '../config'
+import { useTheme } from '../contexts/ThemeContext'
 
 const DEFAULT_SYSTEM_PROMPT = `Você é o Jarvis, um sistema operacional cognitivo pessoal. Você ajuda o dono a alcançar objetivos delegando tarefas e usando ferramentas.
 
@@ -21,6 +22,7 @@ const GUARDRAILS = [
 type ProviderOption = { id: string; default_model: string }
 
 export default function RulesPage() {
+  const { theme, toggleTheme } = useTheme()
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT)
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
@@ -210,6 +212,39 @@ export default function RulesPage() {
                 </span>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Appearance Config */}
+        <section>
+          <h3 className="mono" style={{
+            color: 'hsl(var(--neon-cyan))',
+            fontSize: 11,
+            letterSpacing: '0.1em',
+            marginBottom: 12,
+          }}>
+            APPEARANCE
+          </h3>
+          <div className="hud-panel" style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="mono" style={{ fontSize: 12, color: 'hsl(var(--text-secondary))' }}>THEME</span>
+              <button
+                onClick={toggleTheme}
+                style={{
+                  background: 'hsl(var(--hud-bg))',
+                  border: '1px solid hsl(var(--border-dim))',
+                  color: 'hsl(var(--neon-cyan))',
+                  padding: '4px 12px',
+                  borderRadius: 'var(--radius)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: 'inherit',
+                  textTransform: 'uppercase'
+                }}
+              >
+                {theme} MODE
+              </button>
+            </div>
           </div>
         </section>
 

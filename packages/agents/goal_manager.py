@@ -26,6 +26,9 @@ from packages.shared.contracts import (
     utcnow,
 )
 from packages.shared.ports import GoalStore, ToolExecutor
+from packages.kernel.kernel import Kernel
+from packages.registry.registry import CapabilityRegistry
+from packages.kernel.runtime.base import ExecutionRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -34,9 +37,12 @@ DECOMPOSE_PROMPT = """\
 Você é o planejador do Jarvis. Dado um objetivo, decomponha em tarefas \
 executáveis. Cada tarefa deve ter um título claro e curto.
 
+Se capacidades (capabilities) estiverem disponíveis no contexto, prefira associar \
+a tarefa à capability (capability) e tool apropriadas.
+
 Responda APENAS com JSON no formato:
 [
-  {"title": "...", "tool": "web_search" | null, "depends_on_index": [] }
+  {"title": "...", "capability": "nome_da_cap" | null, "tool": "tool_da_cap" | null, "depends_on_index": [] }
 ]
 
 depends_on_index é lista de índices (0-based) das tarefas que precisam \
@@ -50,9 +56,10 @@ class GoalManager:
     def __init__(
         self,
         goal_store: GoalStore,
-        tool_executor: ToolExecutor,
-        llm: LLMProvider,
+        tool_executor: ToolExecutor | Kernel | None = None,
+        llm: LLMProvider | None = None,
         memory: MemorySystem | None = None,
+        registry: CapabilityRegistry | None = None,
     ) -> None:
         self._store = goal_store
         self._tools = tool_executor
@@ -60,13 +67,27 @@ class GoalManager:
         # v1.3: opcional de propósito. Com `None`, este arquivo se comporta
         # exatamente como antes da fatia de memória.
         self._memory = memory
+        self._registry = registry
 
     async def decompose_goal(self, goal: Goal) -> list[Task]:
         """Usa LLM para decompor goal em tasks."""
         # v1.3: é aqui que uma falha repetida de capability deixa de ser histórico
         # e entra no plano seguinte (`plan.md` §10, nível `experience`).
         contexto = await self._memory.planning_context(goal) if self._memory else ""
-        system = f"{DECOMPOSE_PROMPT}\n{contexto}" if contexto else DECOMPOSE_PROMPT
+        
+        # v1.1: injetar as capabilities ativas no contexto
+        caps_info = ""
+        if self._registry:
+            active_caps = self._registry.get_active()
+            if active_caps:
+                caps_info = "Capabilities ativas disponíveis:\n"
+                for cap in active_caps:
+                    caps_info += f"- capability: {cap.manifest.name}\n"
+                    caps_info += f"  description: {cap.manifest.description}\n"
+                    caps_info += f"  tools: {[t.name for t in cap.manifest.tools]}\n"
+        
+        full_context = f"{caps_info}\n{contexto}".strip()
+        system = f"{DECOMPOSE_PROMPT}\n{full_context}" if full_context else DECOMPOSE_PROMPT
 
         messages = [
             Message(role="system", content=system),
@@ -98,6 +119,7 @@ class GoalManager:
             task = Task(
                 goal_id=goal.id,
                 title=td.get("title", f"Task {i+1}"),
+                capability=td.get("capability"),
                 tool=td.get("tool"),
                 depends_on=deps,
             )
@@ -132,7 +154,29 @@ class GoalManager:
         erro: str | None = None
 
         try:
-            if task.tool and self._tools.has(task.tool):
+            if task.capability and task.tool and self._registry and isinstance(self._tools, Kernel):
+                # Execução via Kernel (v1.2)
+                cap = self._registry.resolve(task.capability, goal_id=task.goal_id, task_id=task.id)
+                if cap is None:
+                    raise Exception(f"Capability gap: capability {task.capability} não resolvida")
+                
+                request = ExecutionRequest(
+                    capability=cap.manifest.name,
+                    tool=task.tool,
+                    manifest=cap.manifest,
+                    arguments=task.input,
+                    dry_run=task.dry_run,
+                    goal_id=task.goal_id,
+                    task_id=task.id
+                )
+                result = await self._tools.run(request)
+                task.output = {"status": result.status.value, "result": result.result, "error": result.error}
+                
+                if result.status.value != "ok":
+                    raise Exception(result.error or f"Falha na execução: {result.status.value}")
+                    
+            elif task.tool and not isinstance(self._tools, Kernel) and hasattr(self._tools, 'has') and self._tools.has(task.tool):
+                # Fallback legado para ToolExecutor
                 result = await self._tools.execute(
                     task.tool,
                     task.input,

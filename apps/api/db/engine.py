@@ -27,6 +27,7 @@ def get_engine() -> AsyncEngine:
             echo=(settings.log_level == "DEBUG"),
             pool_size=5,
             max_overflow=10,
+            pool_pre_ping=True,
         )
     return _engine
 

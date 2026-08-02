@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.deps import get_chat_history_store
+from apps.api.deps import get_memory_vector_store
 from packages.memory.vector_store import cosine_similarity
 from packages.shared.ports import VectorStore
 
@@ -28,10 +28,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #1a1a1a;
+            background-color: transparent;
             color: #fff;
             font-family: sans-serif;
             overflow: hidden;
+            color-scheme: light dark;
         }
         #mynetwork {
             width: 100%;
@@ -110,7 +111,7 @@ def generate_graph_html(records) -> str:
             "id": "empty",
             "label": "Sem Memórias",
             "title": "Jarvis ainda não gravou nenhuma memória.",
-            "color": "#4a4a4a",
+            "color": "#63b3ed",
             "group": "empty"
         })
     else:
@@ -157,9 +158,50 @@ def generate_graph_html(records) -> str:
 
 @router.get("/memory.html")
 async def get_memory_html(
-    store: VectorStore = Depends(get_chat_history_store)
+    store: VectorStore = Depends(get_memory_vector_store)
 ):
     """Retorna o HTML com o grafo do VectorStore num JSON para driblar o Cloudflare."""
     records = await store.get_all()
     html_content = generate_graph_html(records)
     return JSONResponse(content={"html": html_content})
+
+@router.get("/graph.json")
+async def get_memory_graph_json(
+    store: VectorStore = Depends(get_memory_vector_store)
+):
+    """Retorna o grafo JSON no formato NeuralMap."""
+    records = await store.get_all()
+    
+    nodes = []
+    links = []
+    
+    # Custom lobes for memory map
+    lobes = [
+        { "p": "knowledge", "x": -400, "y": 0, "z": 0, "n": "Knowledge" },
+        { "p": "long_term", "x": 400, "y": 0, "z": 0, "n": "Long Term" }
+    ]
+
+    for record in records:
+        label = record.text[:40].replace('\n', ' ') + ("..." if len(record.text) > 40 else "")
+        nodes.append({
+            "id": record.id,
+            "label": label,
+            "source_file": record.namespace,
+            "file_type": "memory",
+            "community": 1 if record.namespace == "knowledge" else 2,
+            "deg": 0,
+        })
+
+    for i in range(len(records)):
+        for j in range(i + 1, len(records)):
+            sim = cosine_similarity(records[i].embedding, records[j].embedding)
+            if sim > 0.70:
+                links.append({
+                    "source": records[i].id,
+                    "target": records[j].id,
+                    "confidence": f"{sim:.2f}"
+                })
+                nodes[i]["deg"] += 1
+                nodes[j]["deg"] += 1
+
+    return JSONResponse(content={"nodes": nodes, "links": links, "lobes": lobes})

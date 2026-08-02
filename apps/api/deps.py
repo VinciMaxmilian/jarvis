@@ -26,9 +26,28 @@ from packages.shared.contracts import ProviderId
 from packages.shared.settings import Settings, get_settings
 from packages.memory.factory import build_vector_store
 from packages.shared.ports import VectorStore
+from packages.registry.registry import CapabilityRegistry
+from packages.kernel.event_bus.in_proc import InProcEventBus
+from packages.kernel.event_bus.redis_bus import RedisEventBus
+import os
 
 _CHAT_HISTORY_STORE: VectorStore | None = None
 _MEMORY_VECTOR_STORE: VectorStore | None = None
+_REGISTRY: CapabilityRegistry | None = None
+
+_settings = get_settings()
+if _settings.redis_url:
+    _DUMMY_BUS = RedisEventBus(redis_url=str(_settings.redis_url), consumer_name="api_1")
+else:
+    _DUMMY_BUS = InProcEventBus()
+
+
+def get_capability_registry() -> CapabilityRegistry:
+    global _REGISTRY
+    if _REGISTRY is None:
+        cap_dir = os.path.join(os.path.dirname(__file__), "..", "..", "capabilities")
+        _REGISTRY = CapabilityRegistry(base_dir=cap_dir, event_bus=_DUMMY_BUS)
+    return _REGISTRY
 
 def get_chat_history_store() -> VectorStore:
     global _CHAT_HISTORY_STORE
@@ -76,6 +95,7 @@ def _build_gemini(settings: Settings, model: str) -> LLMProvider:
     return GeminiProvider(
         api_key=settings.gemini_api_key,
         model=model or settings.gemini_model,
+        embed_model="gemini-embedding-2",
     )
 
 
@@ -332,14 +352,29 @@ async def get_llm_provider(session: AsyncSession) -> LLMProvider:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+_MCP_MANAGER = None
+
+async def get_mcp_manager():
+    global _MCP_MANAGER
+    if _MCP_MANAGER is None:
+        from packages.mcp.client_manager import MCPClientManager
+        from pathlib import Path
+        mcp_dir = Path(os.path.dirname(__file__)).parent.parent / "mcp"
+        mcp_dir.mkdir(exist_ok=True)
+        _MCP_MANAGER = MCPClientManager(mcp_dir)
+        await _MCP_MANAGER.discover_and_connect()
+    return _MCP_MANAGER
+
 async def get_tool_executor(session: AsyncSession) -> SystemToolExecutor:
     settings = get_settings()
     llm = await get_llm_provider(session)
     history_store = get_chat_history_store()
+    mcp_manager = await get_mcp_manager()
     return SystemToolExecutor(
         tavily_api_key=settings.tavily_api_key,
         llm=llm,
-        chat_history_store=history_store
+        chat_history_store=history_store,
+        mcp_manager=mcp_manager
     )
 
 async def get_chief_ai(

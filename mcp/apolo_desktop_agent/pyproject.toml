@@ -1,0 +1,4 @@
+[project]
+name = "apolo_desktop_agent"
+version = "0.1.0"
+dependencies = ["mcp"]

@@ -1,0 +1,21 @@
+name = "memoria_anotacoes"
+description = "Permite anotar preferências, fatos ou informações que o usuário solicitou que fossem lembradas permanentemente na base de conhecimento (LanceDB)."
+
+[permissions]
+subprocess = true
+network = []
+filesystem = [
+    "c:/Users/Paulo/Documents/Friday/jarvis/data/knowledge",
+    "c:/Users/Paulo/Documents/Friday/jarvis/scripts"
+]
+
+[[tools]]
+name = "salvar_preferencia"
+description = "Salva uma nova preferência ou fato na base de conhecimento definitiva e aciona a reindexação."
+idempotent = false
+requires_approval = false
+
+[tools.input_schema]
+type = "object"
+required = ["conteudo"]
+properties.conteudo = { type = "string", description = "O fato ou preferência para memorizar de forma descritiva e detalhada." }

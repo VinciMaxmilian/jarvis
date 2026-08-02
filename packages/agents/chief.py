@@ -32,6 +32,7 @@ Regras:
 - Quando precisar de informações atuais, use a ferramenta web_search.
 - Seja direto e objetivo.
 - Se não sabe algo e não tem ferramentas para descobrir, diga.
+- Sempre que criar um novo servidor/agente MCP em Python, importe o FastMCP usando: `from fastmcp import FastMCP`. NUNCA use `mcp.server.fastmcp`. No final do arquivo, SEMPRE adicione o bloco de inicialização padrão: `if __name__ == "__main__": mcp.run()`.
 """
 
 
@@ -101,7 +102,11 @@ class ChiefAI:
                 )
             )
 
-        tool_specs = self._tools.specs()
+        if hasattr(self._tools, "get_all_specs"):
+            tool_specs = await self._tools.get_all_specs()
+        else:
+            tool_specs = self._tools.specs()
+            
         max_tool_rounds = 5
 
         for _round in range(max_tool_rounds):

@@ -80,8 +80,7 @@
   --warning: 35 85% 45%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+.dark {
     color-scheme: dark;
 
     --neu-bg:      #232730;
@@ -98,15 +97,15 @@
     --accent-ink:  #0e1219;
     --accent-glow: rgba(106, 157, 255, 0.3);
 
-    --ink:   #e8ecf3;
-    --ink-2: #b3bbc9;
-    --ink-3: #7e8798;
+    --ink:         #dce0e9;
+    --ink-2:       #aab1c0;
+    --ink-3:       #767e8d;
 
-    --hud-bg: 222 15% 16%;
-    --hud-surface: 222 15% 16%;
-    --hud-panel: 222 15% 16%;
-    --hud-elevated: 222 15% 21%;
-    --neon-cyan: 219 100% 71%;
+    --hud-bg: 222 15% 15%;
+    --hud-surface: 222 15% 15%;
+    --hud-panel: 222 15% 15%;
+    --hud-elevated: 222 15% 18%;
+    --neon-cyan: 219 70% 59%;
     --neon-blue: 219 70% 59%;
     --neon-purple: 265 70% 74%;
     --neon-amber: 38 90% 62%;
@@ -117,7 +116,6 @@
     --text-muted: 220 11% 55%;
     --border-dim: 222 12% 26%;
     --border: 222 12% 26%;
-  }
 }
 
 /* ---- Reset ---- */

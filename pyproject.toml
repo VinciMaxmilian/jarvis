@@ -35,6 +35,11 @@ dependencies = [
     "apscheduler>=3.10",
     # v1.3 — memória `knowledge`: vetores embarcados, backup é copiar o diretório.
     "lancedb>=0.13",
+    # v2 - EventBus Redis Streams
+    "redis>=5.0.0",
+    # v3 - Model Context Protocol
+    "mcp>=1.0.0",
+    "fastmcp>=3.0.0",
 ]
 
 [project.optional-dependencies]

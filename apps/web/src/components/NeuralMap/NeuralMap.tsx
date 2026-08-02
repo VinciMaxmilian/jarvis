@@ -6,9 +6,10 @@ interface NeuralMapProps {
   backgroundMode?: boolean;
   activeNodes?: string[];
   theme?: Theme;
+  url?: string;
 }
 
-export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light' }: NeuralMapProps) {
+export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light', url = '/graph.json' }: NeuralMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<NeuralEngine | null>(null);
   const [ready, setReady] = useState(false);
@@ -22,11 +23,9 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
   const [searchQuery, setSearchQuery] = useState('');
   const [showFileExplorer, setShowFileExplorer] = useState(false);
 
-  // Uma única criação/destruição por montagem. Sem o dispose, o rAF do engine
-  // continuava rodando depois de sair da página.
   useEffect(() => {
     let cancelled = false;
-    loadGraph()
+    loadGraph(url)
       .then(json => {
         if (cancelled || !canvasRef.current || engineRef.current) return;
         const engine = new NeuralEngine(canvasRef.current, json, theme);
@@ -35,7 +34,7 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
         engineRef.current = engine;
         setReady(true);
       })
-      .catch(err => console.error('Failed to load graph.json', err));
+      .catch(err => console.error('Failed to load graph', err));
 
     return () => {
       cancelled = true;
@@ -43,9 +42,11 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
       engineRef.current = null;
       setReady(false);
     };
-    // theme/backgroundMode iniciais só; mudanças vão pelos efeitos abaixo
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme]);
+  }, [url]);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.setTheme(theme);
+  }, [theme, ready]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.backgroundMode = backgroundMode;
