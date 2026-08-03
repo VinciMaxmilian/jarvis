@@ -6,11 +6,13 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
 
 from apps.api.deps import get_memory_vector_store
 from packages.memory.vector_store import cosine_similarity
+from packages.memory.graphify_store import GraphifyVectorStore
 from packages.shared.ports import VectorStore
 
 router = APIRouter()
@@ -205,3 +207,32 @@ async def get_memory_graph_json(
                 nodes[j]["deg"] += 1
 
     return JSONResponse(content={"nodes": nodes, "links": links, "lobes": lobes})
+
+
+@router.post("/graphify/update")
+async def trigger_graphify_update(
+    store: VectorStore = Depends(get_memory_vector_store)
+):
+    """Dispara a rotina em background do Graphify para processar o corpus da memória."""
+    if isinstance(store, GraphifyVectorStore):
+        store.trigger_graphify_update()
+        return JSONResponse(content={"status": "ok", "message": "Graphify update iniciado em background."})
+    return JSONResponse(
+        content={"status": "error", "message": "O backend de memória atual não é 'graphify'."},
+        status_code=400
+    )
+
+
+@router.get("/graphify.html")
+async def get_graphify_html():
+    """Retorna o HTML interativo gerado nativamente pelo Graphify."""
+    # O arquivo é gerado em: data/memory_corpus/graphify-out/graph.html
+    html_path = Path("./data/memory_corpus/graphify-out/graph.html")
+    if html_path.exists():
+        return FileResponse(html_path)
+    
+    return HTMLResponse(
+        content="<html><body><h2>O grafo ainda não foi gerado.</h2><p>Vá em 'Memory' -> 'Atualizar Grafo' para iniciar a extração do Graphify.</p></body></html>",
+        status_code=404
+    )
+

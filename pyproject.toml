@@ -41,6 +41,10 @@ dependencies = [
     "mcp>=1.0.0",
     "fastmcp>=3.0.0",
     "google-genai>=2.16.0",
+    "faster-whisper>=1.2.1",
+    "edge-tts>=7.2.8",
+    "webrtcvad>=2.0.10",
+    "pydub>=0.25.1",
 ]
 
 [project.optional-dependencies]

@@ -21,7 +21,7 @@ export function useDesktopIntegration(toggleCall: () => void) {
 
       // 1. Global Shortcut
       try {
-        await register('CommandOrControl+Space', (event) => {
+        await register('CommandOrControl+Space', (event: any) => {
           if (event.state === 'Pressed') {
             toggleCallRef.current();
           }
@@ -43,7 +43,7 @@ export function useDesktopIntegration(toggleCall: () => void) {
       // 3. Window Close Dialog
       try {
         const appWindow = getCurrentWindow();
-        await appWindow.onCloseRequested(async (event) => {
+        await appWindow.onCloseRequested(async (event: any) => {
           // Prevent the default close behavior
           event.preventDefault();
           

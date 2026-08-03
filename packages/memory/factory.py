@@ -39,12 +39,13 @@ from packages.memory.stores import (
 )
 from packages.memory.system import MemorySystem
 from packages.memory.vector_store import InMemoryVectorStore, LanceDBVectorStore
+from packages.memory.graphify_store import GraphifyVectorStore
 from packages.memory.working import WorkingMemory
 from packages.shared.ports import EventBus, VectorStore
 
 logger = structlog.get_logger(__name__)
 
-VectorBackend = Literal["memory", "lancedb"]
+VectorBackend = Literal["memory", "lancedb", "graphify"]
 
 #: Default `memory`: um backend que não sobe em CPU sem AVX2 não pode ser o
 #: caminho padrão de um sistema que precisa subir.
@@ -61,11 +62,11 @@ DEFAULT_EMBEDDING_DIM = 1024
 def vector_backend(env: Mapping[str, str] | None = None) -> VectorBackend:
     """Lê o backend da configuração. Valor desconhecido falha nomeando os válidos."""
     bruto = (env or os.environ).get(VECTOR_BACKEND_ENV, DEFAULT_VECTOR_BACKEND).strip()
-    if bruto not in ("memory", "lancedb"):
+    if bruto not in ("memory", "lancedb", "graphify"):
         raise ValueError(
-            f"{VECTOR_BACKEND_ENV}={bruto!r} desconhecido. Válidos: memory, lancedb."
+            f"{VECTOR_BACKEND_ENV}={bruto!r} desconhecido. Válidos: memory, lancedb, graphify."
         )
-    return "lancedb" if bruto == "lancedb" else "memory"
+    return bruto  # type: ignore
 
 
 def build_vector_store(
@@ -79,6 +80,12 @@ def build_vector_store(
     if backend == "lancedb":
         logger.info("memory.vector_store.lancedb", path=lancedb_path)
         return LanceDBVectorStore(lancedb_path, table=table, dim=dim)
+
+    if backend == "graphify":
+        persist_path = Path(lancedb_path).parent / "vector" / f"{table}_graph_index.json"
+        corpus_dir = Path(lancedb_path).parent / "memory_corpus"
+        logger.info("memory.vector_store.graphify", persist_path=str(persist_path), corpus_dir=str(corpus_dir))
+        return GraphifyVectorStore(persist_path=persist_path, corpus_dir=corpus_dir)
 
     persist_path = Path(lancedb_path).parent / "vector" / f"{table}_index.json"
     logger.info("memory.vector_store.in_memory", persist_path=str(persist_path))
