@@ -18,7 +18,7 @@ WORKDIR /app/apps/web
 # Só os manifestos: `npm ci` (lockfile obrigatório, instalação reprodutível) só
 # roda de novo quando package.json/package-lock.json mudam, não a cada .tsx salvo.
 COPY apps/web/package.json apps/web/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 # --------------------------------------------------------------------------- #
 # Estágio 2 — dev server

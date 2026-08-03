@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse
 
 from apps.api.cf_access import install_cloudflare_access
 from apps.api.db.engine import dispose_engine
-from apps.api.routers import chat, goals, history, settings, tools, memory
+from apps.api.routers import chat, goals, history, settings, tools, memory, voice
 from packages.shared.settings import get_settings
 
 
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
     app.include_router(history.router, prefix="/api/history", tags=["history"])
     app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
+    app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
 
     @app.get("/health")
     def health_check() -> dict[str, str]:
