@@ -49,8 +49,7 @@ O foco do projeto mudou de "criar o motor" para "ensinar o motor a andar" e deix
 
 ### 🎙️ Fase Sensorial: Voz com Gemini 3.1 Live API
 - **Arquitetura A2A (Audio-to-Audio):** Em vez do antigo pipeline (STT → LLM Texto → TTS), a conversa será uma via única de baixa latência utilizando WebSocket com a `Live API` do Google. Jarvis ouvirá e responderá com voz nativa interpretando inclusive entonações e gerindo suas próprias interrupções.
-- **Visão Computacional Multimodal:** Durante a conversação por voz, o agente será capaz de **enxergar as telas** do usuário.
-- **Agência em Tempo Real com Histórico:** Com um histórico de contexto de 5 minutos, o Jarvis poderá atuar ativamente no computador a partir de um comando verbal, podendo:
+- **Visão Computacional Multimodal:** Durante a conversação por voz, o agente será capaz de **enxergar as telas** do usuário, tendo um historico de 5 minutos da tela.
   - Criar, editar, excluir e mover arquivos e pastas de forma orgânica.
   - Criar e editar diretamente documentos formatados como **DOCX, PDF, XLSX e CSV**.
 - **Ingestão e Vetorização Contínua:** O agente ganhará uma ferramenta para receber arquivos ou **links** (ex: artigos completos da Wikipedia), vetorizá-los sob demanda e arquivá-los diretamente na pasta `data`, transformando a fonte em uma memória permanente e consultável.
