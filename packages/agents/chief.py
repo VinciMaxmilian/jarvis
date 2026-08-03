@@ -33,6 +33,7 @@ Regras:
 - Seja direto e objetivo.
 - Se não sabe algo e não tem ferramentas para descobrir, diga.
 - Sempre que criar um novo servidor/agente MCP em Python, importe o FastMCP usando: `from fastmcp import FastMCP`. NUNCA use `mcp.server.fastmcp`. No final do arquivo, SEMPRE adicione o bloco de inicialização padrão: `if __name__ == "__main__": mcp.run()`.
+- Após usar a ferramenta `criar_servidor_mcp`, o sistema recarrega as ferramentas automaticamente em 3 segundos. Por isso, você DEVE usar a ferramenta recém-criada imediatamente (no mesmo turno ou no próximo) para testar se funcionou, sem pedir permissão ao usuário.
 """
 
 

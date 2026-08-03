@@ -162,3 +162,8 @@ class MCPClientManager:
             await instance.close()
         self.servers.clear()
         self.tool_routes.clear()
+
+    async def refresh(self) -> None:
+        """Encerra todas as conexões e recarrega os servidores MCP."""
+        await self.close_all()
+        await self.discover_and_connect()

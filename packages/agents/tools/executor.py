@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 import httpx
+import asyncio
 from packages.shared.contracts import ToolSpec
 from packages.shared.ports import ToolNotFound, VectorStore
 from packages.llm.base import LLMProvider
@@ -274,12 +275,14 @@ class SystemToolExecutor:
                     f.write(f'[project]\nname = "{nome}"\nversion = "0.1.0"\ndependencies = ["mcp"]\n')
                     
             if self._mcp_manager:
+                # Dá 3 segundos pro watchfiles no Windows reiniciar o servidor
+                await asyncio.sleep(3)
                 # Tenta redescobrir imediatamente para conectar
-                await self._mcp_manager.discover_and_connect()
+                await self._mcp_manager.refresh()
                 
             return {
                 "status": "success",
-                "message": f"Servidor MCP '{nome}' criado e salvo em {main_path}. Se as dependências estiverem instaladas, ele já está conectado!"
+                "message": f"Servidor MCP '{nome}' criado e salvo em {main_path}. Se as dependências estiverem instaladas, as ferramentas já estão disponíveis neste exato momento!"
             }
         except Exception as exc:
             return {"error": str(exc)}

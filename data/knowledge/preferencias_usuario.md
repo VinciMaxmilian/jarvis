@@ -1,2 +1,3 @@
 - Paulo gosta de macarrão.
 - O macarrão alho e óleo é o preferido de Paulo, pois é simples e gostoso.
+- A amoreca do Senhor (Brunna) ama a cor rosa.
