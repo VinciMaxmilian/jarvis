@@ -49,6 +49,11 @@ O foco do projeto mudou de "criar o motor" para "ensinar o motor a andar" e deix
 
 ### 🎙️ Fase Sensorial: Voz com Gemini 3.1 Live API
 - **Arquitetura A2A (Audio-to-Audio):** Em vez do antigo pipeline (STT → LLM Texto → TTS), a conversa será uma via única de baixa latência utilizando WebSocket com a `Live API` do Google. Jarvis ouvirá e responderá com voz nativa interpretando inclusive entonações e gerindo suas próprias interrupções.
+- **Visão Computacional Multimodal:** Durante a conversação por voz, o agente será capaz de **enxergar as telas** do usuário.
+- **Agência em Tempo Real com Histórico:** Com um histórico de contexto de 5 minutos, o Jarvis poderá atuar ativamente no computador a partir de um comando verbal, podendo:
+  - Criar, editar, excluir e mover arquivos e pastas de forma orgânica.
+  - Criar e editar diretamente documentos formatados como **DOCX, PDF, XLSX e CSV**.
+- **Ingestão e Vetorização Contínua:** O agente ganhará uma ferramenta para receber arquivos ou **links** (ex: artigos completos da Wikipedia), vetorizá-los sob demanda e arquivá-los diretamente na pasta `data`, transformando a fonte em uma memória permanente e consultável.
 
 ### 📱 Fase Mobile (Companion App)
 - O aplicativo de bolso. Tratará as submissões e navegação, atuando como o verdadeiro comunicador push para gerir o *Gate 1* da geração de capacidades.
@@ -62,5 +67,45 @@ As tarefas menores que ficaram pendentes no último handoff:
 2. Corrigir os 3 erros mínimos sintáticos pendentes apontados pelo Linter (`ruff check .`).
 3. **Decisão pendente de Host:** Alterar o target do Cloudflare Tunnel de `:5173` (Vite dev server aberto) para uma versão empacotada de produção com Nginx (`:5174`).
 4. Rotacionar e reinstalar o token do Tunnel que foi exposto publicamente no chat em iterações antigas.
+
+---
+
+## 4. Planos Possíveis e Diretrizes de Foco
+
+### 1. Capabilities (Prioridade Máxima)
+Sem capabilities úteis, o Kernel apenas orquestra. O esforço deve ser concentrado em construir as seguintes "mãos" para o Jarvis atuar:
+- **Filesystem**
+- **Python Runner**
+- **Git**
+- **Shell**
+- **Browser**
+- **HTTP**
+- **RAG Search**
+- **Memory Writer**
+- **Planner Utilities**
+
+### 2. Event Bus
+Migrar completamente para **Redis Streams**. Isso abre espaço arquitetural para:
+- Retries automáticos
+- Consumer groups
+- Múltiplos workers
+- Distribuição futura de carga
+
+### 3. Papéis Especializados
+Separar definitivamente as etapas cognitivas em perfis:
+- **Planner**
+- **Researcher**
+- **Executor**
+- **Reviewer**
+
+Cada um operando de forma restrita, com: **prompt próprio**, **ferramentas próprias**, **temperatura própria** e **modelo próprio** (inclusive alternando entre local ou remoto). Esse fluxo fechado reduzirá drasticamente as alucinações.
+
+### 4. Self Evolution e Autoconsciência
+A auto-evolução só deve ser habilitada quando os pilares acima estiverem extremamente sólidos.
+
+A arquitetura segmentada é muito mais segura do que permitir a geração automática e instalação cega. O fluxo a ser seguido é restrito a:
+`Miss` ➔ `SPEC` ➔ `Aprovação Mobile` ➔ `Geração de Código` ➔ `Testes` ➔ `Branch` ➔ `Dry-Run` ➔ `Instalação`.
+
+**Autoconsciência do Sistema:** O Agente/Jarvis deve ter ciência total do próprio sistema (como ele é formado, sua arquitetura técnica, seus protocolos e as ferramentas usadas para rodá-lo), para ser capaz de sustentar e evoluir o ambiente de forma coerente.
 
 *Nota: As ramificações de planejamento foram documentadas inteiramente. Ao realizar pesquisas e criar planos daqui para a frente, este documento ditará a realidade sobre o estado do projeto.*
