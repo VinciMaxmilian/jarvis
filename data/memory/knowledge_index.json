@@ -1,29 +1,20 @@
 [
   {
     "doc_id": "preferencias_usuario.md",
-    "source": "/app/data/knowledge/preferencias_usuario.md",
-    "content_hash": "6004324ad6787a13a51b5d713cdf62ff8f911aa2a8e95cd4a8e5f30112df6247",
+    "source": "C:\\Users\\paulo.zimmermann\\Documents\\jarvis\\data\\knowledge\\preferencias_usuario.md",
+    "content_hash": "12186eb15e60e9fa50eb9f883c4d61e89b9dd37a3df5b59d45688a0a69d6e3cb",
     "chunk_ids": [
       "preferencias_usuario.md#0"
     ],
-    "indexed_at": "2026-08-02T20:32:43.710134Z"
+    "indexed_at": "2026-08-04T18:11:42.553138Z"
   },
   {
     "doc_id": "comida.md",
     "source": "/app/data/knowledge/comida.md",
-    "content_hash": "42b73438f6b82cec52dc704338e775623da671f58ed330f1215640d09ff4a646",
+    "content_hash": "eefab361f2b25438c32136410affeeceec859993038dd3da685b4c6646acdc67",
     "chunk_ids": [
       "comida.md#0"
     ],
-    "indexed_at": "2026-08-02T20:36:20.826948Z"
-  },
-  {
-    "doc_id": "jogos.md",
-    "source": "/app/data/knowledge/jogos.md",
-    "content_hash": "3aac545d3af471c91b66bb3fcfcc431b7357172f637146c208a5285c354c9850",
-    "chunk_ids": [
-      "jogos.md#0"
-    ],
-    "indexed_at": "2026-08-02T20:36:21.403777Z"
+    "indexed_at": "2026-08-04T14:26:23.098828Z"
   }
 ]

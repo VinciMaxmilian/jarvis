@@ -71,9 +71,12 @@ async def main() -> None:
         blocker = GoalBlocker(store)
         bus.subscribe(blocker, types=["capability.gap_detected"])
         
+        from packages.scheduler.adapters import KnowledgeBaseAdapter
+        
         scheduler = SchedulerManager.from_database_url(
             settings.database_url,
             event_bus=bus,
+            knowledge_index=KnowledgeBaseAdapter(memory),
         )
 
         gm = GoalManager(goal_store=store, tool_executor=kernel, llm=llm, memory=memory, registry=registry)

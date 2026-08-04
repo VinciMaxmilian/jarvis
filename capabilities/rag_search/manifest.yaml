@@ -1,0 +1,48 @@
+name: rag_search
+version: 0.1.0
+description: Busca conhecimento textual nos arquivos do Jarvis.
+status: pending_approval
+entrypoint: capabilities.rag_search.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem: []
+  process: false
+tools:
+- name: rag_query
+  description: Busca um termo ou frase na base de conhecimento e retorna trechos de documentos relevantes.
+  idempotent: true
+  requires_approval: false
+  input_schema:
+    type: object
+    required: [query]
+    properties:
+      query:
+        type: string
+        description: Termo ou pergunta a buscar na base.
+        minLength: 1
+      limite:
+        type: integer
+        default: 5
+        description: Quantidade máxima de resultados.
+  output_schema:
+    type: object
+    required: [resultados, query]
+    properties:
+      query:
+        type: string
+      resultados:
+        type: array
+        items:
+          type: object
+          properties:
+            documento:
+              type: string
+            trecho:
+              type: string
+            score:
+              type: number
+trigger_intents:
+- buscar conhecimento
+- pesquisar nos arquivos de conhecimento
+dependencies: []

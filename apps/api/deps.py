@@ -52,13 +52,15 @@ def get_capability_registry() -> CapabilityRegistry:
 def get_chat_history_store() -> VectorStore:
     global _CHAT_HISTORY_STORE
     if _CHAT_HISTORY_STORE is None:
-        _CHAT_HISTORY_STORE = build_vector_store(table="chat_history")
+        from packages.memory.factory import vector_backend
+        _CHAT_HISTORY_STORE = build_vector_store(backend=vector_backend(), table="chat_history")
     return _CHAT_HISTORY_STORE
 
 def get_memory_vector_store() -> VectorStore:
     global _MEMORY_VECTOR_STORE
     if _MEMORY_VECTOR_STORE is None:
-        _MEMORY_VECTOR_STORE = build_vector_store(table="memory")
+        from packages.memory.factory import vector_backend
+        _MEMORY_VECTOR_STORE = build_vector_store(backend=vector_backend(), table="memory")
     return _MEMORY_VECTOR_STORE
 
 
@@ -369,18 +371,36 @@ async def get_tool_executor(session: AsyncSession) -> SystemToolExecutor:
     settings = get_settings()
     llm = await get_llm_provider(session)
     history_store = get_chat_history_store()
+    memory_store = get_memory_vector_store()
     mcp_manager = await get_mcp_manager()
+    embed_llm = None
+    if settings.gemini_api_key:
+        embed_llm = _build_gemini(settings, "")
+
+    agno_knowledge = None
+    try:
+        from packages.rag.agno_knowledge import get_agno_knowledge
+        agno_knowledge = get_agno_knowledge()
+    except Exception as exc:
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.warning("deps.tool_executor.agno_knowledge.failed", error=str(exc))
+
     return SystemToolExecutor(
         tavily_api_key=settings.tavily_api_key,
         llm=llm,
         chat_history_store=history_store,
-        mcp_manager=mcp_manager
+        mcp_manager=mcp_manager,
+        memory_vector_store=memory_store,
+        embed_llm=embed_llm,
+        agno_knowledge=agno_knowledge,
     )
 
 async def get_chief_ai(
     session: AsyncSession,
 ) -> ChiefAI:
     """Chief AI com todas as dependências injetadas."""
+    settings = get_settings()
     llm = await get_llm_provider(session)
     tools = await get_tool_executor(session)
     conv_store = PgConversationStore(session)
@@ -394,10 +414,31 @@ async def get_chief_ai(
     row = result.scalar_one_or_none()
     system_prompt = row.system_prompt if row and row.system_prompt else None
 
+    # Provider dedicado para embeddings: sempre Gemini (tem API de embedding
+    # gratuita e confiável). O provider de chat (ex: LM Studio com qwen/gemma)
+    # frequentemente NÃO tem modelo de embedding carregado, o que faz o RAG
+    # falhar silenciosamente e o agente alucinar.
+    embed_llm = None
+    if settings.gemini_api_key:
+        embed_llm = _build_gemini(settings, "")
+
+    # Inicializa Agno Knowledge (se falhar, loga erro e continua sem Agno)
+    agno_knowledge = None
+    try:
+        from packages.rag.agno_knowledge import get_agno_knowledge
+        agno_knowledge = get_agno_knowledge()
+    except Exception as exc:
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.warning("deps.agno_knowledge.failed", error=str(exc))
+
     return ChiefAI(
         llm=llm,
         tools=tools,
         conversation_store=conv_store,
         system_prompt=system_prompt,
         chat_history_store=get_chat_history_store(),
+        memory_vector_store=get_memory_vector_store(),
+        embed_llm=embed_llm,
+        agno_knowledge=agno_knowledge,
     )

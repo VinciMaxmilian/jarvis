@@ -1,0 +1,5 @@
+# Permissões requeridas pelo rag_search.
+filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis/data/knowledge
+process: false
+network: []

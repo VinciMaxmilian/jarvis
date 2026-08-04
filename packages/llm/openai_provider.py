@@ -169,9 +169,41 @@ class OpenAIProvider:
             choice = response.choices[0]
             usage = response.usage
 
+            text = choice.message.content or ""
+            tool_calls = self._parse_tool_calls(choice.message.tool_calls)
+
+            # Fallback for local models (like in LM Studio) that fail to use the API's tool_calls
+            # but instead output the tool call as raw JSON in the text field.
+            if not tool_calls and text:
+                import re
+                import uuid
+                # Try to extract JSON from markdown block or just use the raw text
+                match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+                json_str = match.group(1) if match else text.strip()
+                
+                if json_str.startswith("{") and '"name"' in json_str:
+                    try:
+                        parsed = json.loads(json_str)
+                        if "name" in parsed and ("arguments" in parsed or "parameters" in parsed):
+                            args = parsed.get("arguments", parsed.get("parameters", {}))
+                            if isinstance(args, str):
+                                try:
+                                    args = json.loads(args)
+                                except json.JSONDecodeError:
+                                    pass
+                            if isinstance(args, dict):
+                                tool_calls.append(ToolCall(
+                                    id=f"call_{uuid.uuid4().hex[:8]}", 
+                                    name=parsed["name"], 
+                                    arguments=args
+                                ))
+                                text = "" # Clear text as it was entirely a tool call
+                    except json.JSONDecodeError:
+                        pass
+
             return Completion(
-                text=choice.message.content or "",
-                tool_calls=self._parse_tool_calls(choice.message.tool_calls),
+                text=text,
+                tool_calls=tool_calls,
                 input_tokens=usage.prompt_tokens if usage else 0,
                 output_tokens=usage.completion_tokens if usage else 0,
                 model=response.model or self._model,

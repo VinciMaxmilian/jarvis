@@ -1,0 +1,5 @@
+# Permissões requeridas pelo memory_writer.
+filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis/data/knowledge
+process: false
+network: []

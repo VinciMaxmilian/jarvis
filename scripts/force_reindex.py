@@ -17,29 +17,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = structlog.get_logger(__name__)
 
-class KnowledgeBaseAdapter:
-    def __init__(self, memory_system):
-        self.kb = memory_system.knowledge
-
-    async def list_indexed(self):
-        return await self.kb._index.all()
-
-    async def upsert(self, document) -> None:
-        from packages.memory.models import KnowledgeDocument as MemDoc
-        mem_doc = MemDoc(
-            doc_id=document.doc_id,
-            source=document.source,
-            text=document.text
-        )
-        await self.kb.ingest(mem_doc)
-
-    async def delete(self, doc_ids):
-        count = 0
-        for did in doc_ids:
-            if await self.kb._index.delete(did):
-                count += 1
-        return count
-
 async def main() -> None:
     try:
         cfg = SchedulerConfig()
@@ -47,6 +24,7 @@ async def main() -> None:
         
         provider = _build_gemini(settings, "")
         memory = build_memory_system(provider)
+        from packages.scheduler.adapters import KnowledgeBaseAdapter
         adapter = KnowledgeBaseAdapter(memory)
         
         service = ReindexService(

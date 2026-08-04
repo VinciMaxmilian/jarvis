@@ -1,31 +1,28 @@
 import { useState } from 'react'
+import { NeuralMap } from '../components/NeuralMap/NeuralMap'
 import { getApiBase } from '../config'
 
 export default function MemoryPage() {
   const apiBase = getApiBase()
   const [updating, setUpdating] = useState(false)
-  
+  /* loadGraph() memoiza por URL, e o NeuralMap só recria o Engine quando a URL
+   * muda — o contador é o que força um refetch depois de reindexar. */
+  const [versao, setVersao] = useState(0)
+
   const handleUpdate = async () => {
     setUpdating(true)
     try {
-      const res = await fetch(`${apiBase}/api/memory/graphify/update`, {
-        method: 'POST'
-      })
-      if (res.ok) {
-        // It's processing in background. Give it a few seconds before we reload the iframe
-        setTimeout(() => {
-          // Force iframe reload by updating state or just trusting the user to wait
-          setUpdating(false)
-          // Simple reload trick
-          const iframe = document.getElementById('graphify-iframe') as HTMLIFrameElement
-          if (iframe) iframe.src = iframe.src
-        }, 10000) // waits 10s
-      } else {
+      // Só faz sentido com MEMORY_VECTOR_BACKEND=graphify; nos outros backends
+      // o 400 é esperado e o refetch abaixo já traz o estado atual do store.
+      const res = await fetch(`${apiBase}/api/memory/graphify/update`, { method: 'POST' })
+      const espera = res.ok ? 8000 : 0
+      window.setTimeout(() => {
+        setVersao(v => v + 1)
         setUpdating(false)
-        alert('O backend não está configurado para Graphify (MEMORY_VECTOR_BACKEND=graphify)')
-      }
+      }, espera)
     } catch (e) {
       console.error(e)
+      setVersao(v => v + 1)
       setUpdating(false)
     }
   }
@@ -49,9 +46,9 @@ export default function MemoryPage() {
             color: 'hsl(var(--neon-cyan))',
             fontSize: 12,
             letterSpacing: '0.1em',
-          }}>MEMORY GRAPH (GRAPHIFY)</span>
-          
-          <button 
+          }}>MEMORY MAP</span>
+
+          <button
             onClick={handleUpdate}
             disabled={updating}
             style={{
@@ -62,7 +59,7 @@ export default function MemoryPage() {
               fontSize: '10px',
               cursor: updating ? 'wait' : 'pointer',
               borderRadius: '4px',
-              fontFamily: 'monospace'
+              fontFamily: 'monospace',
             }}
           >
             {updating ? 'ATUALIZANDO EM BACKGROUND...' : 'ATUALIZAR GRAFO'}
@@ -75,19 +72,9 @@ export default function MemoryPage() {
         }}>LONG TERM STORAGE</span>
       </div>
 
-      {/* Graphify HTML embed */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <iframe 
-          id="graphify-iframe"
-          src={`${apiBase}/api/memory/graphify.html`}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            background: '#1a1a1a'
-          }}
-          title="Graphify Memory"
-        />
+      {/* Mesmo motor da aba Brain, alimentado pelos vetores da memória */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <NeuralMap url={`${apiBase}/api/memory/graph.json?v=${versao}`} />
       </div>
     </div>
   )

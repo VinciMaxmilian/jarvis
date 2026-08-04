@@ -8,9 +8,12 @@ from __future__ import annotations
 from typing import Any
 import httpx
 import asyncio
+import structlog
 from packages.shared.contracts import ToolSpec
 from packages.shared.ports import ToolNotFound, VectorStore
 from packages.llm.base import LLMProvider
+
+logger = structlog.get_logger(__name__)
 
 TAVILY_SEARCH_SPEC = ToolSpec(
     name="web_search",
@@ -29,7 +32,6 @@ TAVILY_SEARCH_SPEC = ToolSpec(
             "max_results": {
                 "type": "integer",
                 "description": "Número máximo de resultados (1-10)",
-                "default": 5,
             },
         },
         "required": ["query"],
@@ -41,9 +43,9 @@ TAVILY_SEARCH_SPEC = ToolSpec(
 SEARCH_MEMORY_SPEC = ToolSpec(
     name="search_memory",
     description=(
-        "Busca informações no histórico de conversas passadas usando busca vetorial semântica. "
-        "Use esta tool quando o usuário fizer referência a algo que foi discutido anteriormente ou "
-        "pedir para resgatar dados do passado."
+        "Busca informações na memória de longo prazo (base de conhecimento com preferências, fatos) "
+        "e no histórico de conversas passadas usando busca vetorial semântica. "
+        "Sempre use esta ferramenta antes de afirmar que não sabe algo sobre o usuário, seus gostos ou histórico."
     ),
     input_schema={
         "type": "object",
@@ -55,7 +57,6 @@ SEARCH_MEMORY_SPEC = ToolSpec(
             "limit": {
                 "type": "integer",
                 "description": "Número máximo de mensagens a recuperar",
-                "default": 5,
             },
         },
         "required": ["query"],
@@ -89,6 +90,53 @@ CRIAR_SERVIDOR_MCP_SPEC = ToolSpec(
     requires_approval=True
 )
 
+KNOWLEDGE_SAVE_SPEC = ToolSpec(
+    name="knowledge_save",
+    description=(
+        "Grava um fato, preferência ou informação permanente sobre o usuário na base "
+        "de conhecimento. Use quando o usuário disser algo sobre si que deva ser lembrado "
+        "em conversas futuras (gostos, rotina, decisões, contexto pessoal). "
+        "NÃO use para informação efêmera ou para o que já está na base."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "fato": {
+                "type": "string",
+                "description": "O fato em uma frase, em 3ª pessoa. Ex: 'O usuário gosta de vermelho.'",
+            },
+            "categoria": {
+                "type": "string",
+                "description": "Arquivo temático. Ex: preferencias_usuario, comida, trabalho.",
+            },
+        },
+        "required": ["fato"],
+    },
+    idempotent=False,
+    requires_approval=False,
+)
+
+KNOWLEDGE_FORGET_SPEC = ToolSpec(
+    name="knowledge_forget",
+    description=(
+        "Remove um fato ou documento inteiro da base de conhecimento usando o seu ID (caminho do arquivo). "
+        "Use quando o usuário pedir explicitamente para esquecer alguma informação ou quando "
+        "uma informação estiver desatualizada."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "doc_id": {
+                "type": "string",
+                "description": "O ID do documento a ser removido (ex: o caminho do arquivo retornado na busca ou gravação)."
+            },
+        },
+        "required": ["doc_id"],
+    },
+    idempotent=True,
+    requires_approval=False,
+)
+
 def _as_int(value: object, *, default: int) -> int:
     if isinstance(value, bool):
         return default
@@ -110,17 +158,25 @@ class SystemToolExecutor:
         tavily_api_key: str, 
         llm: LLMProvider, 
         chat_history_store: VectorStore,
-        mcp_manager: Any | None = None
+        mcp_manager: Any | None = None,
+        memory_vector_store: VectorStore | None = None,
+        embed_llm: LLMProvider | None = None,
+        agno_knowledge=None,
     ) -> None:
         self._tavily_api_key = tavily_api_key
         self._llm = llm
+        self._embed_llm = embed_llm or llm
         self._history_store = chat_history_store
         self._mcp_manager = mcp_manager
+        self._memory_store = memory_vector_store
+        self._agno_knowledge = agno_knowledge
         
         self._tools: dict[str, ToolSpec] = {
             TAVILY_SEARCH_SPEC.name: TAVILY_SEARCH_SPEC,
             SEARCH_MEMORY_SPEC.name: SEARCH_MEMORY_SPEC,
             CRIAR_SERVIDOR_MCP_SPEC.name: CRIAR_SERVIDOR_MCP_SPEC,
+            KNOWLEDGE_SAVE_SPEC.name: KNOWLEDGE_SAVE_SPEC,
+            KNOWLEDGE_FORGET_SPEC.name: KNOWLEDGE_FORGET_SPEC,
         }
 
     async def get_all_specs(self) -> list[ToolSpec]:
@@ -167,6 +223,19 @@ class SystemToolExecutor:
                 return await self._criar_servidor_mcp(
                     nome=str(arguments.get("nome", "")),
                     codigo_main_py=str(arguments.get("codigo_main_py", "")),
+                    dry_run=dry_run
+                )
+                
+            if name == "knowledge_save":
+                return await self._knowledge_save(
+                    fato=str(arguments.get("fato", "")),
+                    categoria=str(arguments.get("categoria", "preferencias_usuario")),
+                    dry_run=dry_run
+                )
+                
+            if name == "knowledge_forget":
+                return await self._knowledge_forget(
+                    doc_id=str(arguments.get("doc_id", "")),
                     dry_run=dry_run
                 )
                 
@@ -229,18 +298,61 @@ class SystemToolExecutor:
             }
             
         try:
-            vetores = await self._llm.embed([query])
-            matches = await self._history_store.search(
+            vetores = await self._embed_llm.embed([query])
+            
+            # Busca no histórico de chat
+            matches_history = await self._history_store.search(
                 vetores[0], namespace="chat_history", limit=limit
             )
             
+            # Busca na base de conhecimento (fatos, preferências)
             results = []
-            for match in matches:
+            
+            usou_agno = False
+            if self._agno_knowledge:
+                # Agno 2.x: search(max_results=...), não num_documents=.
+                from packages.rag.agno_knowledge import documents_to_texts, search_knowledge
+
+                try:
+                    docs = await search_knowledge(
+                        query, limit=limit, knowledge=self._agno_knowledge
+                    )
+                    for texto in documents_to_texts(docs):
+                        results.append({
+                            "score": 1.0, # Agno abstracts scores by default
+                            "text": texto,
+                            "date": "",
+                            "source": "knowledge_base"
+                        })
+                    usou_agno = bool(results)
+                except Exception as exc:
+                    logger.warning("tools.search_memory.agno_failed", error=str(exc))
+
+            if not usou_agno:
+                matches_knowledge = []
+                if self._memory_store:
+                    matches_knowledge = await self._memory_store.search(
+                        vetores[0], namespace="knowledge", limit=limit
+                    )
+                for match in matches_knowledge:
+                    results.append({
+                        "score": match.score,
+                        "text": match.record.text,
+                        "date": match.record.metadata.get("updated_at", ""),
+                        "source": "knowledge_base"
+                    })
+                
+            for match in matches_history:
                 results.append({
                     "score": match.score,
                     "text": match.record.text,
                     "date": match.record.metadata.get("updated_at", ""),
+                    "source": "chat_history"
                 })
+                
+            # Ordena por score e pega os top `limit` globais
+            results.sort(key=lambda x: x["score"], reverse=True)
+            results = results[:limit]
                 
             return {
                 "query": query,
@@ -287,4 +399,120 @@ class SystemToolExecutor:
         except Exception as exc:
             return {"error": str(exc)}
 
-__all__ = ["SystemToolExecutor", "TAVILY_SEARCH_SPEC", "SEARCH_MEMORY_SPEC", "CRIAR_SERVIDOR_MCP_SPEC"]
+    async def _knowledge_save(
+        self, fato: str, categoria: str = "preferencias_usuario", dry_run: bool = False
+    ) -> dict[str, object]:
+        if dry_run:
+            return {
+                "dry_run": True,
+                "action": "knowledge_save",
+                "fato": fato,
+                "categoria": categoria,
+            }
+
+        # 1. valida + sanitiza categoria
+        import re
+        import datetime
+        from pathlib import Path
+        
+        categoria = re.sub(r"[^a-z0-9_]", "", categoria.lower())
+        if not categoria:
+            return {"sucesso": False, "motivo": "Categoria inválida."}
+            
+        from packages.scheduler.config import SchedulerConfig
+        config = SchedulerConfig()
+        knowledge_dir = config.knowledge_dir
+        
+        target_path = (knowledge_dir / f"{categoria}.md").resolve()
+        if not str(target_path).startswith(str(knowledge_dir.resolve())):
+            return {"sucesso": False, "motivo": "Caminho inválido."}
+            
+        # 3. dedup barato
+        fato_limpo = fato.strip().lower()
+        if target_path.exists():
+            content = target_path.read_text(encoding="utf-8")
+            if fato_limpo in content.lower():
+                return {"sucesso": True, "duplicado": True}
+                
+        # 4. append
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        linha = f"- [{now_str}] {fato.strip()}\n"
+        with open(target_path, "a", encoding="utf-8") as f:
+            f.write(linha)
+            
+        texto_inteiro = target_path.read_text(encoding="utf-8")
+        doc_id = str(target_path)
+        
+        # 5. add_knowledge
+        try:
+            if self._agno_knowledge:
+                from packages.rag.agno_knowledge import add_knowledge
+                await add_knowledge(
+                    text=texto_inteiro,
+                    name=doc_id,
+                    metadata={"doc_id": doc_id, "source": "knowledge_save"},
+                    knowledge=self._agno_knowledge,
+                    replace=True
+                )
+        except Exception as exc:
+            logger.warning("knowledge_save.agno_failed", error=str(exc))
+            
+        # 6. fallback sem Agno
+        if self._memory_store:
+            try:
+                # Import memory updates
+                from packages.shared.ports import VectorRecord
+                
+                pedacos = [texto_inteiro]
+                embeddings = await self._embed_llm.embed(pedacos)
+                registros = [
+                    VectorRecord(
+                        id=f"{doc_id}#0",
+                        namespace="knowledge",
+                        text=texto_inteiro,
+                        embedding=list(embeddings[0]),
+                        metadata={"doc_id": doc_id, "source": "knowledge_save"}
+                    )
+                ]
+                await self._memory_store.upsert(registros)
+            except Exception as exc:
+                logger.warning("knowledge_save.memory_store_failed", error=str(exc))
+
+        return {"sucesso": True, "caminho": str(target_path), "categoria": categoria}
+
+    async def _knowledge_forget(
+        self, doc_id: str, dry_run: bool = False
+    ) -> dict[str, object]:
+        if dry_run:
+            return {"dry_run": True, "action": "knowledge_forget", "doc_id": doc_id}
+            
+        try:
+            from packages.scheduler.config import SchedulerConfig
+            from pathlib import Path
+            import os
+            config = SchedulerConfig()
+            knowledge_dir = config.knowledge_dir
+            target_path = Path(doc_id).resolve()
+            
+            if str(target_path).startswith(str(knowledge_dir.resolve())) and target_path.exists():
+                target_path.unlink()
+                
+            if self._agno_knowledge:
+                from packages.rag.agno_knowledge import get_agno_knowledge_async
+                import asyncio
+                kb = await get_agno_knowledge_async()
+                await asyncio.to_thread(kb.remove_vectors_by_name, doc_id)
+                
+            if self._memory_store:
+                # Delete do fallback store
+                try:
+                    await self._memory_store.delete([f"{doc_id}#0"])
+                except Exception:
+                    pass
+                    
+            return {"sucesso": True, "mensagem": f"Documento {doc_id} removido da memória."}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+__all__ = ["SystemToolExecutor", "TAVILY_SEARCH_SPEC", "SEARCH_MEMORY_SPEC", "CRIAR_SERVIDOR_MCP_SPEC", "KNOWLEDGE_SAVE_SPEC", "KNOWLEDGE_FORGET_SPEC"]

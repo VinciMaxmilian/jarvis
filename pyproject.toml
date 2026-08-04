@@ -45,6 +45,13 @@ dependencies = [
     "edge-tts>=7.2.8",
     "webrtcvad>=2.0.10",
     "pydub>=0.25.1",
+    "setuptools<70",        # Exigido pelo webrtcvad (depende de pkg_resources, removido no setuptools>=70)
+    "graphifyy>=0.9.29",    # Motor do knowledge graph de memória (graphify-out)
+    "agno>=2.2,<3",         # Framework para Knowledge (RAG). Pin em 2.x: a API do
+                            # 1.x era search(num_documents=)/insert(); packages/rag
+                            # fala 2.x — search(max_results=)/add_content_async().
+    "pgvector>=0.3.2",      # Para usar PgVector com Agno
+    "pypdf>=4.3.0",         # Leitura de PDF no Agno
 ]
 
 [project.optional-dependencies]

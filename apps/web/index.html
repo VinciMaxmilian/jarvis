@@ -1,14 +1,17 @@
 <!doctype html>
-<html lang="pt-BR" class="dark">
+<!-- data-theme já no HTML servido: o ThemeContext só confirma depois que o
+     React monta, e sem isto a primeira pintura sairia no tema claro. -->
+<html lang="pt-BR" class="dark" data-theme="command">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Jarvis — Sistema Operacional Cognitivo Pessoal" />
     <title>Jarvis</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Fontes saíram do Google Fonts e entraram via @fontsource no main.tsx:
+         Barlow / Barlow Condensed (design system Industry) e JetBrains Mono.
+         Remoto quebra PWA offline e não passa no `font-src 'self'` que o desk
+         vai fechar. KaTeX ainda vem de CDN — pendência conhecida. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
   </head>
   <body>

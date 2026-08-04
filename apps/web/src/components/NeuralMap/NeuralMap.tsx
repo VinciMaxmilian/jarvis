@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { NeuralEngine, loadGraph, type GraphNode, type Theme } from './Engine';
+import { NeuralEngine, loadGraph, paletaDoTema, temaEfetivo, type GraphNode, type Theme } from './Engine';
 import { FileExplorer } from './FileExplorer';
 
 interface NeuralMapProps {
   backgroundMode?: boolean;
   activeNodes?: string[];
+  /** Força a variante. Omitido = segue o tema do documento. */
   theme?: Theme;
   url?: string;
 }
 
-export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light', url = '/graph.json' }: NeuralMapProps) {
+export function NeuralMap({ backgroundMode = false, activeNodes, theme, url = '/graph.json' }: NeuralMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<NeuralEngine | null>(null);
   const [ready, setReady] = useState(false);
@@ -23,12 +24,40 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
   const [searchQuery, setSearchQuery] = useState('');
   const [showFileExplorer, setShowFileExplorer] = useState(false);
 
+  /* O canvas não enxerga `var(--*)`: quem troca o tema mexe no elemento
+   * raiz, então é lá que a gente escuta. MutationObserver em vez de um
+   * evento próprio porque não exige que o ThemeContext (que outro trecho
+   * do redesign está reescrevendo) saiba da existência do mapa — funciona
+   * com `class="dark"` de hoje e com `data-theme="command-dark"` de
+   * amanhã, sem acoplar os dois lados. */
+  const [temaDoc, setTemaDoc] = useState<Theme>(() => temaEfetivo());
+  const temaAtivo = theme ?? temaDoc;
+
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined') return;
+    let quadro = 0;
+    const obs = new MutationObserver(() => {
+      // trocar de tema costuma mexer em class e data-theme quase junto;
+      // um rAF colapsa a rajada num único recálculo.
+      if (quadro) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = 0;
+        setTemaDoc(temaEfetivo());
+      });
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    return () => {
+      if (quadro) cancelAnimationFrame(quadro);
+      obs.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     loadGraph(url)
       .then(json => {
         if (cancelled || !canvasRef.current || engineRef.current) return;
-        const engine = new NeuralEngine(canvasRef.current, json, theme);
+        const engine = new NeuralEngine(canvasRef.current, json, paletaDoTema(temaAtivo));
         engine.onClick = setSelectedNode;
         engine.backgroundMode = backgroundMode;
         engineRef.current = engine;
@@ -45,8 +74,8 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
   }, [url]);
 
   useEffect(() => {
-    if (engineRef.current) engineRef.current.setTheme(theme);
-  }, [theme, ready]);
+    engineRef.current?.aplicarPaleta(paletaDoTema(temaAtivo));
+  }, [temaAtivo, ready]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.backgroundMode = backgroundMode;
@@ -99,7 +128,7 @@ export function NeuralMap({ backgroundMode = false, activeNodes, theme = 'light'
       className="neural-root"
       style={{
         position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
-        background: backgroundMode ? 'transparent' : 'var(--neu-bg)',
+        background: backgroundMode ? 'transparent' : 'var(--color-bg, var(--neu-bg))',
       }}
     >
       <canvas

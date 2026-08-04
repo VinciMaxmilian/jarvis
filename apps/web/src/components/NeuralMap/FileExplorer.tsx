@@ -41,12 +41,14 @@ export const FileExplorer = memo(function FileExplorer({ nodes, hiddenPaths, onT
     <div className="neu-raised" style={{
       width: '100%', height: '100%',
       overflowY: 'auto', padding: '14px',
-      fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+      fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: '11px',
       display: 'flex', flexDirection: 'column'
     }}>
+      {/* separador: hairline por token quando existir, fio neumórfico enquanto não */}
       <div style={{
         fontSize: '9px', letterSpacing: '0.14em', color: 'var(--ink-3)',
-        marginBottom: 12, paddingBottom: 8, boxShadow: '0 1px 0 var(--neu-lo), 0 2px 0 var(--neu-hi)'
+        marginBottom: 12, paddingBottom: 8,
+        borderBottom: '1px solid var(--color-divider, var(--neu-edge-lo))'
       }}>
         ARQUIVOS · clique p/ ocultar · dir p/ isolar
       </div>
@@ -65,7 +67,7 @@ function TreeLevel({ level, hiddenPaths, onToggle, onIsolate, depth }: { level: 
   });
 
   return (
-    <div style={{ marginLeft: depth > 0 ? 12 : 0, paddingLeft: depth > 0 ? 4 : 0, borderLeft: depth > 0 ? '1px solid var(--neu-edge-lo)' : 'none' }}>
+    <div style={{ marginLeft: depth > 0 ? 12 : 0, paddingLeft: depth > 0 ? 4 : 0, borderLeft: depth > 0 ? '1px solid var(--color-divider, var(--neu-edge-lo))' : 'none' }}>
       {keys.map(k => {
         const node = level[k];
         if (node.dir) {
@@ -102,7 +104,7 @@ function TreeLevel({ level, hiddenPaths, onToggle, onIsolate, depth }: { level: 
                 filter: isOff ? 'grayscale(1)' : 'none',
                 transition: '0.1s'
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(2px)'; e.currentTarget.style.background = 'var(--neu-edge)'; }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(2px)'; e.currentTarget.style.background = 'var(--color-divider, var(--neu-edge))'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.background = 'transparent'; }}
             >
               <span>{icon} {node.name}</span>

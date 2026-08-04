@@ -1,0 +1,53 @@
+name: git
+version: 0.1.0
+description: Executa comandos git no repositório local de forma segura.
+status: pending_approval
+entrypoint: capabilities.git.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem: []
+  process: true
+tools:
+- name: git_exec
+  description: Executa um comando git. Use comandos read-only (status, diff) ou que alteram o histórico com cautela.
+  idempotent: false
+  requires_approval: true
+  input_schema:
+    type: object
+    required: [argumentos]
+    properties:
+      argumentos:
+        type: array
+        items:
+          type: string
+        description: Lista de argumentos para o git (ex. ["status"], ["commit", "-m", "msg"]).
+        minItems: 1
+      cwd:
+        type: string
+        default: ""
+        description: Diretório relativo à raiz ou absoluto.
+      timeout:
+        type: number
+        default: 30.0
+        description: Segundos até o processo ser morto (máximo 300).
+  output_schema:
+    type: object
+    required: [stdout, stderr, truncado, expirou]
+    properties:
+      exit_code:
+        type: integer
+        nullable: true
+      stdout:
+        type: string
+      stderr:
+        type: string
+      truncado:
+        type: boolean
+      expirou:
+        type: boolean
+trigger_intents:
+- fazer commit no git
+- verificar status do repositório
+- puxar ou enviar código via git
+dependencies: []

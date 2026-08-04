@@ -1,0 +1,367 @@
+name: filesystem
+version: 0.1.0
+description: Lê, escreve, lista, move, copia e apaga arquivos e pastas dentro das pastas concedidas
+  no manifest.
+status: pending_approval
+approved_commit: null
+entrypoint: capabilities.filesystem.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis/data/workspace
+  process: false
+tools:
+- name: fs_apagar
+  description: Apaga um arquivo ou uma pasta dentro das pastas concedidas. Pasta com conteúdo
+    exige o modo recursivo.
+  input_schema:
+    properties:
+      caminho:
+        description: Arquivo ou pasta a apagar.
+        maxLength: 4096
+        minLength: 1
+        title: Caminho
+        type: string
+      recursivo:
+        default: false
+        description: Exigido para apagar pasta com conteúdo. Sem isto, pasta não vazia é recusada.
+        title: Recursivo
+        type: boolean
+      ausente_ok:
+        default: false
+        description: '`true` faz caminho inexistente não ser erro.'
+        title: Ausente Ok
+        type: boolean
+    required:
+    - caminho
+    title: ApagarEntrada
+    type: object
+  output_schema:
+    properties:
+      caminho:
+        title: Caminho
+        type: string
+      apagados:
+        title: Apagados
+        type: integer
+      ausente:
+        default: false
+        title: Ausente
+        type: boolean
+    required:
+    - caminho
+    - apagados
+    title: ApagarSaida
+    type: object
+  idempotent: false
+  requires_approval: true
+- name: fs_copiar
+  description: Copia um arquivo ou uma pasta inteira, com origem e destino dentro das pastas
+    concedidas.
+  input_schema:
+    description: 'Mesmos campos de `MoverEntrada`. Modelo próprio porque o schema publicado
+
+      é por tool: reusar o nome faria as duas tools aparecerem com o mesmo `title`
+
+      no catálogo, e o catálogo é o que o Chief AI lê para escolher.'
+    properties:
+      origem:
+        description: Arquivo ou pasta a mover.
+        maxLength: 4096
+        minLength: 1
+        title: Origem
+        type: string
+      destino:
+        description: Caminho de destino, arquivo ou pasta.
+        maxLength: 4096
+        minLength: 1
+        title: Destino
+        type: string
+      sobrescrever:
+        default: false
+        description: Permite substituir um destino que já existe.
+        title: Sobrescrever
+        type: boolean
+    required:
+    - origem
+    - destino
+    title: CopiarEntrada
+    type: object
+  output_schema:
+    properties:
+      origem:
+        title: Origem
+        type: string
+      destino:
+        title: Destino
+        type: string
+      arquivos:
+        title: Arquivos
+        type: integer
+    required:
+    - origem
+    - destino
+    - arquivos
+    title: CopiarSaida
+    type: object
+  idempotent: false
+  requires_approval: false
+- name: fs_criar_pasta
+  description: Cria uma pasta dentro das pastas concedidas, com os níveis intermediários que
+    faltarem.
+  input_schema:
+    properties:
+      caminho:
+        description: Pasta a criar, com os níveis intermediários.
+        maxLength: 4096
+        minLength: 1
+        title: Caminho
+        type: string
+      existe_ok:
+        default: true
+        description: '`false` faz pasta já existente ser erro.'
+        title: Existe Ok
+        type: boolean
+    required:
+    - caminho
+    title: CriarPastaEntrada
+    type: object
+  output_schema:
+    properties:
+      caminho:
+        title: Caminho
+        type: string
+      criado:
+        title: Criado
+        type: boolean
+    required:
+    - caminho
+    - criado
+    title: CriarPastaSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+- name: fs_escrever
+  description: Grava texto num arquivo dentro das pastas concedidas, substituindo ou acrescentando
+    ao fim.
+  input_schema:
+    properties:
+      caminho:
+        description: Arquivo a gravar, relativo à raiz concedida ou absoluto.
+        maxLength: 4096
+        minLength: 1
+        title: Caminho
+        type: string
+      conteudo:
+        description: Conteúdo em texto.
+        title: Conteudo
+        type: string
+      anexar:
+        default: false
+        description: '`true` acrescenta ao fim; `false` substitui o arquivo inteiro.'
+        title: Anexar
+        type: boolean
+      criar_pastas:
+        default: true
+        description: Cria as pastas que faltarem no caminho.
+        title: Criar Pastas
+        type: boolean
+      encoding:
+        default: utf-8
+        description: Codificação do texto.
+        maxLength: 32
+        title: Encoding
+        type: string
+    required:
+    - caminho
+    - conteudo
+    title: EscreverEntrada
+    type: object
+  output_schema:
+    properties:
+      caminho:
+        title: Caminho
+        type: string
+      bytes:
+        title: Bytes
+        type: integer
+      criado:
+        title: Criado
+        type: boolean
+    required:
+    - caminho
+    - bytes
+    - criado
+    title: EscreverSaida
+    type: object
+  idempotent: false
+  requires_approval: false
+- name: fs_ler
+  description: Lê o conteúdo de um arquivo de texto dentro das pastas concedidas.
+  input_schema:
+    properties:
+      caminho:
+        description: Arquivo a ler, relativo à raiz concedida ou absoluto.
+        maxLength: 4096
+        minLength: 1
+        title: Caminho
+        type: string
+      max_bytes:
+        default: 1048576
+        description: Teto de bytes lidos. Arquivo maior é recusado, não truncado.
+        maximum: 1048576
+        minimum: 1
+        title: Max Bytes
+        type: integer
+      encoding:
+        default: utf-8
+        description: Codificação do texto.
+        maxLength: 32
+        title: Encoding
+        type: string
+    required:
+    - caminho
+    title: LerEntrada
+    type: object
+  output_schema:
+    properties:
+      caminho:
+        title: Caminho
+        type: string
+      conteudo:
+        title: Conteudo
+        type: string
+      bytes:
+        title: Bytes
+        type: integer
+    required:
+    - caminho
+    - conteudo
+    - bytes
+    title: LerSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+- name: fs_listar
+  description: Lista arquivos e pastas de um diretório concedido, com ou sem recursão.
+  input_schema:
+    properties:
+      caminho:
+        default: ''
+        description: Pasta a listar. Vazio lista a própria raiz concedida.
+        maxLength: 4096
+        title: Caminho
+        type: string
+      recursivo:
+        default: false
+        description: Desce nas subpastas em vez de listar um nível.
+        title: Recursivo
+        type: boolean
+      limite:
+        default: 500
+        description: Teto de entradas devolvidas. O excedente marca `truncado`.
+        maximum: 500
+        minimum: 1
+        title: Limite
+        type: integer
+    title: ListarEntrada
+    type: object
+  output_schema:
+    $defs:
+      EntradaInfo:
+        description: 'Uma linha da listagem.
+
+
+          `caminho` é relativo à raiz de trabalho para que a saída seja utilizável como
+
+          argumento da próxima chamada sem o chamador ter de recortar prefixo.'
+        properties:
+          nome:
+            title: Nome
+            type: string
+          caminho:
+            title: Caminho
+            type: string
+          tipo:
+            title: Tipo
+            type: string
+          bytes:
+            default: 0
+            title: Bytes
+            type: integer
+        required:
+        - nome
+        - caminho
+        - tipo
+        title: EntradaInfo
+        type: object
+    properties:
+      entradas:
+        items:
+          $ref: '#/$defs/EntradaInfo'
+        title: Entradas
+        type: array
+      total:
+        default: 0
+        title: Total
+        type: integer
+      truncado:
+        default: false
+        title: Truncado
+        type: boolean
+    title: ListarSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+- name: fs_mover
+  description: Move ou renomeia um arquivo ou pasta, com origem e destino dentro das pastas
+    concedidas.
+  input_schema:
+    properties:
+      origem:
+        description: Arquivo ou pasta a mover.
+        maxLength: 4096
+        minLength: 1
+        title: Origem
+        type: string
+      destino:
+        description: Caminho de destino, arquivo ou pasta.
+        maxLength: 4096
+        minLength: 1
+        title: Destino
+        type: string
+      sobrescrever:
+        default: false
+        description: Permite substituir um destino que já existe.
+        title: Sobrescrever
+        type: boolean
+    required:
+    - origem
+    - destino
+    title: MoverEntrada
+    type: object
+  output_schema:
+    properties:
+      origem:
+        title: Origem
+        type: string
+      destino:
+        title: Destino
+        type: string
+    required:
+    - origem
+    - destino
+    title: MoverSaida
+    type: object
+  idempotent: false
+  requires_approval: false
+dependencies: []
+trigger_intent:
+- ler um arquivo
+- escrever um arquivo
+- listar arquivos de uma pasta
+- mover ou renomear um arquivo
+- copiar um arquivo ou pasta
+- apagar um arquivo ou pasta
+- criar uma pasta

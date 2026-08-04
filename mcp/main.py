@@ -64,9 +64,4 @@ discover_and_register_tools()
 if __name__ == "__main__":
     # Rodar o MCP via SSE (HTTP) na porta 8765 (evita conflitos na 8000).
     # Assim o Agente (que está isolado ou na nuvem) pode se conectar na sua máquina!
-    # Workaround temporário para um bug na lib fastmcp (qualquer kwarg estava sendo passado para anyio.run)
-    import anyio
-    async def run_server():
-        await app.run_sse_async(port=8765)
-    
-    anyio.run(run_server)
+    app.run(transport="sse", port=8765)

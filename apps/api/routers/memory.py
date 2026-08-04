@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -167,46 +168,105 @@ async def get_memory_html(
     html_content = generate_graph_html(records)
     return JSONResponse(content={"html": html_content})
 
+# --- Grafo no formato NeuralMap (mesmo motor da aba Brain) -------------------
+
+# Nomes amigáveis por namespace; qualquer outro vira Title Case automático.
+_NOMES_LOBO = {
+    "knowledge": "Knowledge",
+    "long_term": "Long Term",
+    "chat_history": "Chat History",
+    "default": "Core",
+}
+
+# Abaixo disso a aresta vira ruído: com embeddings densos quase tudo passa de 0.5.
+_SIM_MINIMA = 0.70
+# Acima disso a aresta é sólida; entre os dois o Engine desenha tracejado
+# (confidence === "INFERRED"), que é como o grafo de código marca relação fraca.
+_SIM_FORTE = 0.82
+# Sem teto por nó um corpus homogêneo vira bola de pelo — cada nó fica só com
+# seus vizinhos mais próximos.
+_MAX_ARESTAS_POR_NO = 6
+
+
+def _lobos_da_memoria(namespaces: list[str]) -> list[dict[str, Any]]:
+    """Distribui um lobo por namespace num anel — o Engine posiciona os nós
+    ao redor do lobo cujo `p` casa com o `source_file`."""
+    total = max(1, len(namespaces))
+    raio = 0 if total == 1 else 420 + 90 * total
+    lobos = []
+    for i, ns in enumerate(namespaces):
+        ang = 2 * math.pi * i / total
+        lobos.append({
+            "p": ns,
+            "x": round(math.cos(ang) * raio),
+            "y": 0,
+            "z": round(math.sin(ang) * raio),
+            "n": _NOMES_LOBO.get(ns, ns.replace("_", " ").title()),
+        })
+    return lobos
+
+
+def _rotulo(texto: str, limite: int = 48) -> str:
+    limpo = " ".join(texto.split())
+    return limpo[:limite] + "…" if len(limpo) > limite else limpo or "(vazio)"
+
+
 @router.get("/graph.json")
 async def get_memory_graph_json(
     store: VectorStore = Depends(get_memory_vector_store)
 ):
-    """Retorna o grafo JSON no formato NeuralMap."""
+    """Retorna o grafo JSON no formato NeuralMap (nós + links + lobos)."""
     records = await store.get_all()
-    
-    nodes = []
-    links = []
-    
-    # Custom lobes for memory map
-    lobes = [
-        { "p": "knowledge", "x": -400, "y": 0, "z": 0, "n": "Knowledge" },
-        { "p": "long_term", "x": 400, "y": 0, "z": 0, "n": "Long Term" }
+
+    namespaces = sorted({r.namespace for r in records}) or ["default"]
+    indice_ns = {ns: i for i, ns in enumerate(namespaces)}
+
+    nodes = [
+        {
+            "id": r.id,
+            "label": _rotulo(r.text),
+            "source_file": r.namespace,
+            "file_type": r.namespace,
+            "community": indice_ns.get(r.namespace, 0),
+            "community_name": _NOMES_LOBO.get(r.namespace, r.namespace),
+        }
+        for r in records
     ]
 
-    for record in records:
-        label = record.text[:40].replace('\n', ' ') + ("..." if len(record.text) > 40 else "")
-        nodes.append({
-            "id": record.id,
-            "label": label,
-            "source_file": record.namespace,
-            "file_type": "memory",
-            "community": 1 if record.namespace == "knowledge" else 2,
-            "deg": 0,
-        })
-
+    # Similaridade par a par → top-K por nó. União dos top-K (não interseção):
+    # um nó periférico continua ligado ao seu único vizinho relevante.
+    vizinhos: dict[int, list[tuple[float, int]]] = {i: [] for i in range(len(records))}
     for i in range(len(records)):
         for j in range(i + 1, len(records)):
             sim = cosine_similarity(records[i].embedding, records[j].embedding)
-            if sim > 0.70:
-                links.append({
-                    "source": records[i].id,
-                    "target": records[j].id,
-                    "confidence": f"{sim:.2f}"
-                })
-                nodes[i]["deg"] += 1
-                nodes[j]["deg"] += 1
+            if sim <= _SIM_MINIMA:
+                continue
+            vizinhos[i].append((sim, j))
+            vizinhos[j].append((sim, i))
 
-    return JSONResponse(content={"nodes": nodes, "links": links, "lobes": lobes})
+    vistos: set[tuple[str, str]] = set()
+    links = []
+    for i, pares in vizinhos.items():
+        pares.sort(key=lambda p: p[0], reverse=True)
+        for sim, j in pares[:_MAX_ARESTAS_POR_NO]:
+            chave = (records[i].id, records[j].id) if i < j else (records[j].id, records[i].id)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            links.append({
+                "source": chave[0],
+                "target": chave[1],
+                "relation": "similar",
+                "confidence": "EXTRACTED" if sim >= _SIM_FORTE else "INFERRED",
+                "confidence_score": round(float(sim), 3),
+                "weight": round(float(sim), 3),
+            })
+
+    return JSONResponse(content={
+        "nodes": nodes,
+        "links": links,
+        "lobes": _lobos_da_memoria(namespaces),
+    })
 
 
 @router.post("/graphify/update")

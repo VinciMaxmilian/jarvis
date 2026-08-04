@@ -1,0 +1,47 @@
+name: python_runner
+version: 0.1.0
+description: Executa um script Python isolado e devolve sua saída.
+status: pending_approval
+entrypoint: capabilities.python_runner.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem: []
+  process: true
+tools:
+- name: run_python_code
+  description: Executa o código Python fornecido e devolve a saída padrão e de erro.
+  idempotent: false
+  requires_approval: true
+  input_schema:
+    type: object
+    required: [codigo]
+    properties:
+      codigo:
+        type: string
+        description: Código Python a ser executado.
+        minLength: 1
+      timeout:
+        type: number
+        default: 30.0
+        description: Segundos até o processo ser morto (máximo 300).
+  output_schema:
+    type: object
+    required: [stdout, stderr, truncado, expirou]
+    properties:
+      exit_code:
+        type: integer
+        nullable: true
+      stdout:
+        type: string
+      stderr:
+        type: string
+      truncado:
+        type: boolean
+      expirou:
+        type: boolean
+trigger_intents:
+- executar um script python
+- rodar código python interativo
+- avaliar expressão python
+dependencies: []

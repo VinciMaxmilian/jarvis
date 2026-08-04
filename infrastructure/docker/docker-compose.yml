@@ -19,7 +19,16 @@ name: jarvis
 
 services:
   postgres:
-    image: postgres:16-alpine # D8: era 14
+    # 2026-08-04: era `postgres:16-alpine`. O catálogo do banco já tinha
+    # `vector 0.8.5` registrado, mas a imagem alpine não traz o binário do
+    # pgvector — toda busca semântica do Agno morria em
+    # `could not access file "$libdir/vector"`, e a API engolia o erro
+    # (apps/api/deps.py) e respondia sem RAG, em silêncio.
+    # Esta imagem é o mesmo PostgreSQL 16 com a extensão compilada junto.
+    # Vem de Debian, não de Alpine: o data dir monta sem migração, mas o
+    # collation provider muda (musl -> glibc), então índices de texto pedem
+    # `REINDEX DATABASE` uma vez na troca.
+    image: pgvector/pgvector:pg16 # D8: era 14, depois 16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -225,9 +234,15 @@ services:
   # --------------------------------------------------------------------------- #
   # web-prod (PWA buildado + nginx) — ESTE é o que o Cloudflare Tunnel publica.
   #
-  # Atrás do profile `prod`:
-  #   docker compose -f infrastructure/docker/docker-compose.yml --env-file .env \
-  #     --profile prod up -d web-prod
+  # NO CAMINHO DEFAULT desde 2026-08-04: sobe junto com o resto, sem flag.
+  #   docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d --build
+  #
+  # Antes ficava atrás do profile `prod`, o que trocava "o mundo vê o dev
+  # server" por "o mundo vê 502" — barulhento, mas ainda uma falha. Com o
+  # serviço no default, o alvo do túnel (:5174) está de pé sempre que a stack
+  # está. O custo é o `npm run build` entrar no caminho de todo `--build`: o
+  # estágio `build` roda `tsc -b`, então ERRO DE TIPO AGORA REPROVA `up`.
+  # Isso é desejado — é o único ponto do pipeline onde o TypeScript é obrigatório.
   #
   # POR QUE EXISTE: até a v1.5 o túnel apontava para a porta do dev server do
   # Vite. Publicar um dev server na internet entrega HMR sobre WebSocket, source
@@ -253,7 +268,6 @@ services:
       context: ../..
       dockerfile: apps/web/Dockerfile
       target: prod
-    profiles: ["prod"]
     restart: unless-stopped
     ports:
       # D5 continua valendo, e aqui ele é o aceite duro da v1.5: loopback. O

@@ -68,7 +68,7 @@ class GraphifyVectorStore(InMemoryVectorStore):
             
             # Executa o graphify dentro da pasta do corpus para que ele crie 
             # a pasta graphify-out localmente lá (data/memory_corpus/graphify-out)
-            cmd = ["uv", "run", "graphify", "update", "."]
+            cmd = ["graphify", "update", "."]
             
             subprocess.Popen(
                 cmd,

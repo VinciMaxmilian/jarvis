@@ -1,0 +1,41 @@
+name: browser
+version: 0.1.0
+description: Extrai o texto útil e legível de uma página web.
+status: pending_approval
+entrypoint: capabilities.browser.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem: []
+  process: false
+tools:
+- name: browser_extract_text
+  description: Acessa uma URL e devolve apenas o texto puro e legível, removendo HTML, scripts e estilos.
+  idempotent: true
+  requires_approval: false
+  input_schema:
+    type: object
+    required: [url]
+    properties:
+      url:
+        type: string
+        description: URL da página a ser extraída.
+        minLength: 1
+      timeout:
+        type: number
+        default: 30.0
+        description: Timeout da requisição HTTP em segundos.
+  output_schema:
+    type: object
+    required: [url, texto, erro]
+    properties:
+      url:
+        type: string
+      texto:
+        type: string
+      erro:
+        type: string
+trigger_intents:
+- ler o texto de um site
+- extrair conteúdo de uma página web
+dependencies: ["httpx", "beautifulsoup4"]

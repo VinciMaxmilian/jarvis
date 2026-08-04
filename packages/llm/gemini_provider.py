@@ -110,15 +110,23 @@ def _bare_model(model: str) -> str:
 
 
 def _strip_unsupported_schema(schema: Any) -> Any:
-    """O Gemini (v1beta) não suporta 'additionalProperties' em functionDeclarations.
-    Remove recursivamente essas chaves do JSON Schema para evitar HTTP 400.
+    """O Gemini (v1beta) suporta um subconjunto restrito do JSON Schema.
+    Mantém apenas as chaves permitidas recursivamente para evitar HTTP 400 ou
+    falhas silenciosas onde a API ignora os tools.
     """
+    _allowed_keys = frozenset({
+        "type", "format", "description", "nullable", "enum",
+        "maxItems", "minItems", "properties", "required", "items"
+    })
     if isinstance(schema, dict):
-        return {
-            k: _strip_unsupported_schema(v)
-            for k, v in schema.items()
-            if k != "additionalProperties"
-        }
+        out = {}
+        for k, v in schema.items():
+            if k == "properties":
+                # The keys inside properties are argument names, not schema keywords.
+                out[k] = {arg_name: _strip_unsupported_schema(arg_schema) for arg_name, arg_schema in v.items()}
+            elif k in _allowed_keys:
+                out[k] = _strip_unsupported_schema(v)
+        return out
     if isinstance(schema, list):
         return [_strip_unsupported_schema(item) for item in schema]
     return schema

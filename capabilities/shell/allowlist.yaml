@@ -1,0 +1,18 @@
+# Allowlist de `shell` — os únicos programas que esta capability pode executar.
+#
+# Este arquivo é do DONO, não do autor do código: mexer aqui é a forma de mudar o
+# que a capability alcança sem tocar em Python. Ele é lido em `construir()`; se
+# for apagado, vale `PERMITIDOS_PADRAO` do módulo, que é esta mesma lista.
+#
+# Cada nome acrescentado é superfície de execução a mais, e a allowlist restringe
+# QUAL programa roda, não o que ele faz — `python` aqui já é execução de código
+# arbitrário. Leia `docs/README.md` antes de aumentar a lista.
+#
+# Formato: uma lista de nomes simples, sem caminho e sem argumento.
+permitidos:
+  - git
+  - python
+  - pytest
+  - ruff
+  - black
+  - mypy

@@ -23,3 +23,6 @@ What carried over from this attempt:
 | ADR habit and acceptance-criteria milestones | `jarvis/plan.md` §14–15 |
 
 Nothing here is maintained. Read `jarvis/`.
+
+
+docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d

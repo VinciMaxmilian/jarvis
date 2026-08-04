@@ -1,0 +1,133 @@
+name: shell
+version: 0.1.0
+description: Executa um programa da allowlist com timeout e devolve stdout, stderr e código
+  de saída, sem passar por shell.
+status: pending_approval
+approved_commit: null
+entrypoint: capabilities.shell.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis/data/workspace
+  process: true
+tools:
+- name: shell_executar
+  description: Executa um programa da allowlist com os argumentos dados e devolve stdout,
+    stderr e código de saída. Não passa por shell.
+  input_schema:
+    properties:
+      programa:
+        description: Nome do executável, sem caminho. Tem de estar na allowlist e no PATH.
+        maxLength: 128
+        minLength: 1
+        title: Programa
+        type: string
+      argumentos:
+        description: 'Argumentos, um por item. Não passam por shell: `;` e `|` são texto literal,
+          não operadores.'
+        items:
+          type: string
+        maxItems: 64
+        title: Argumentos
+        type: array
+      cwd:
+        default: ''
+        description: Diretório de trabalho, relativo à raiz concedida ou absoluto dentro dela.
+          Vazio usa a própria raiz.
+        maxLength: 4096
+        title: Cwd
+        type: string
+      timeout:
+        default: 30.0
+        description: Segundos até o processo ser morto.
+        exclusiveMinimum: 0
+        maximum: 300.0
+        title: Timeout
+        type: number
+    required:
+    - programa
+    title: ExecutarEntrada
+    type: object
+  output_schema:
+    description: 'O resultado bruto do processo. Sucesso e fracasso saem pelo mesmo campo.
+
+
+      `exit_code` diferente de zero **não** é erro da tool: o comando rodou e disse
+
+      que falhou, e essa é a resposta que quem perguntou queria. Erro da tool é o
+
+      comando que não pôde ser executado — fora da allowlist, ausente do `PATH`,
+
+      `cwd` fora do escopo. A diferença importa porque o Chief AI trata `Task`
+
+      falhada e `Task` bem-sucedida com saída ruim de formas diferentes.'
+    properties:
+      programa:
+        title: Programa
+        type: string
+      argumentos:
+        items:
+          type: string
+        title: Argumentos
+        type: array
+      exit_code:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Exit Code
+      stdout:
+        default: ''
+        title: Stdout
+        type: string
+      stderr:
+        default: ''
+        title: Stderr
+        type: string
+      truncado:
+        default: false
+        title: Truncado
+        type: boolean
+      expirou:
+        default: false
+        title: Expirou
+        type: boolean
+      cwd:
+        default: ''
+        title: Cwd
+        type: string
+    required:
+    - programa
+    title: ExecutarSaida
+    type: object
+  idempotent: false
+  requires_approval: true
+- name: shell_listar_permitidos
+  description: Lista os programas que esta capability tem autorização para executar.
+  input_schema:
+    description: Sem argumento. O modelo existe para a tool ter schema como todas as outras.
+    properties: {}
+    title: PermitidosEntrada
+    type: object
+  output_schema:
+    properties:
+      permitidos:
+        items:
+          type: string
+        title: Permitidos
+        type: array
+      total:
+        default: 0
+        title: Total
+        type: integer
+    title: PermitidosSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+dependencies: []
+trigger_intent:
+- executar um comando
+- rodar um programa no terminal
+- rodar os testes do projeto
+- ver quais comandos são permitidos

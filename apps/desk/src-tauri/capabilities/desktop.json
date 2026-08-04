@@ -1,5 +1,7 @@
 {
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop-capability",
+  "description": "Permissions used by apps/web/src/hooks/useDesktopIntegration.ts (global shortcut, autostart, tray minimize flow).",
   "platforms": [
     "macOS",
     "windows",
@@ -9,7 +11,15 @@
     "main"
   ],
   "permissions": [
-    "global-shortcut:default",
-    "autostart:default"
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
+    "autostart:default",
+    "dialog:allow-ask",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-destroy",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize"
   ]
 }

@@ -1,0 +1,183 @@
+name: http
+version: 0.1.0
+description: Faz requisições HTTP GET e POST para os hosts concedidos no manifest, com timeout
+  e teto de tamanho de resposta.
+status: pending_approval
+approved_commit: null
+entrypoint: capabilities.http.backend.handlers:main
+runtime: python
+permissions:
+  network:
+  - api.github.com
+  filesystem: []
+  process: false
+tools:
+- name: http_get
+  description: Faz um GET numa URL de host concedido e devolve status, cabeçalhos e corpo,
+    cortado no teto de tamanho.
+  input_schema:
+    description: Argumentos de `http_get`.
+    properties:
+      url:
+        description: URL completa, http ou https.
+        maxLength: 4096
+        minLength: 1
+        title: Url
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        description: Cabeçalhos da requisição.
+        title: Headers
+        type: object
+      timeout:
+        default: 15.0
+        description: Segundos até a requisição ser abandonada.
+        exclusiveMinimum: 0
+        maximum: 120.0
+        title: Timeout
+        type: number
+      max_bytes:
+        default: 1048576
+        description: Teto do corpo lido. Acima disso a resposta volta cortada.
+        maximum: 1048576
+        minimum: 1
+        title: Max Bytes
+        type: integer
+    required:
+    - url
+    title: GetEntrada
+    type: object
+  output_schema:
+    description: 'A resposta como o Chief AI a lê.
+
+
+      `status_code` fora da faixa 2xx **não** é falha da tool: a requisição foi
+
+      feita e o servidor respondeu 404. Falha da tool é não conseguir requisitar —
+
+      host não concedido, DNS que não resolve, conexão recusada, timeout.'
+    properties:
+      url:
+        title: Url
+        type: string
+      status_code:
+        title: Status Code
+        type: integer
+      headers:
+        additionalProperties:
+          type: string
+        title: Headers
+        type: object
+      corpo:
+        default: ''
+        title: Corpo
+        type: string
+      bytes:
+        default: 0
+        title: Bytes
+        type: integer
+      truncado:
+        default: false
+        title: Truncado
+        type: boolean
+    required:
+    - url
+    - status_code
+    title: RespostaSaida
+    type: object
+  idempotent: true
+  requires_approval: false
+- name: http_post
+  description: Faz um POST numa URL de host concedido com o corpo em texto e devolve status,
+    cabeçalhos e corpo da resposta.
+  input_schema:
+    description: Argumentos de `http_post`.
+    properties:
+      url:
+        description: URL completa, http ou https.
+        maxLength: 4096
+        minLength: 1
+        title: Url
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        description: Cabeçalhos da requisição.
+        title: Headers
+        type: object
+      timeout:
+        default: 15.0
+        description: Segundos até a requisição ser abandonada.
+        exclusiveMinimum: 0
+        maximum: 120.0
+        title: Timeout
+        type: number
+      max_bytes:
+        default: 1048576
+        description: Teto do corpo lido. Acima disso a resposta volta cortada.
+        maximum: 1048576
+        minimum: 1
+        title: Max Bytes
+        type: integer
+      corpo:
+        default: ''
+        description: Corpo da requisição, em texto.
+        maxLength: 1048576
+        title: Corpo
+        type: string
+      content_type:
+        default: application/json
+        description: Valor do cabeçalho Content-Type.
+        maxLength: 128
+        title: Content Type
+        type: string
+    required:
+    - url
+    title: PostEntrada
+    type: object
+  output_schema:
+    description: 'A resposta como o Chief AI a lê.
+
+
+      `status_code` fora da faixa 2xx **não** é falha da tool: a requisição foi
+
+      feita e o servidor respondeu 404. Falha da tool é não conseguir requisitar —
+
+      host não concedido, DNS que não resolve, conexão recusada, timeout.'
+    properties:
+      url:
+        title: Url
+        type: string
+      status_code:
+        title: Status Code
+        type: integer
+      headers:
+        additionalProperties:
+          type: string
+        title: Headers
+        type: object
+      corpo:
+        default: ''
+        title: Corpo
+        type: string
+      bytes:
+        default: 0
+        title: Bytes
+        type: integer
+      truncado:
+        default: false
+        title: Truncado
+        type: boolean
+    required:
+    - url
+    - status_code
+    title: RespostaSaida
+    type: object
+  idempotent: false
+  requires_approval: true
+dependencies: []
+trigger_intent:
+- buscar uma página ou API na internet
+- consultar uma API HTTP
+- enviar dados para uma API HTTP

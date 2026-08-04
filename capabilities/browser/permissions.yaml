@@ -1,0 +1,4 @@
+# Permissões requeridas pelo browser.
+network: []
+process: false
+filesystem: []

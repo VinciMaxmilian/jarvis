@@ -1,0 +1,27 @@
+{
+  "comida_md_0.md": {
+    "mtime": 1785853583.0978036,
+    "ast_hash": "48386a518e5ad5723e6f8c55e4cc90ef",
+    "semantic_hash": ""
+  },
+  "preferencias_usuario_md_0.md": {
+    "mtime": 1785853583.645007,
+    "ast_hash": "c67ea249cf8198e87328e711364cc218",
+    "semantic_hash": ""
+  },
+  "msg_a90256c61f0b498f935e519fe752bff3.md": {
+    "mtime": 1785858649.1428115,
+    "ast_hash": "d2fb39cd697621c9d5eb8555f2789f3d",
+    "semantic_hash": ""
+  },
+  "msg_e33c3dc3885c42fcbec153db9474ef7c.md": {
+    "mtime": 1785858623.20218,
+    "ast_hash": "3646fbb015a8c56afe0031c03aa875c0",
+    "semantic_hash": ""
+  },
+  "msg_ea816ce82fe6461ba7f9a074caba4727.md": {
+    "mtime": 1785858081.1440225,
+    "ast_hash": "c17ae2f03dd5821c3d5b0346f33bda47",
+    "semantic_hash": ""
+  }
+}

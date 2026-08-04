@@ -1,0 +1,522 @@
+/* ================================================================
+   INDUSTRY — token sheet + camada de componentes (blueprint)
+
+   Portado do design system "Industry" do projeto Jarvis Command.
+   Regra única do sistema: objeto é quadrado, borda hairline, fundo
+   transparente. Volume vem de linha, nunca de sombra ou preenchimento
+   — é o oposto exato do neumorfismo que existia aqui antes. Por isso
+   a camada `.blueprint` no fim do arquivo zera raio e fundo de tudo:
+   ela é o contrato, não um enfeite.
+
+   Sem `@import` de fonte remota de propósito. O PWA (vite-plugin-pwa)
+   precisa funcionar offline e o `nginx/security-headers.inc` fecha
+   origens externas — fonte vem self-hosted via @fontsource, importada
+   no `main.tsx`.
+   ================================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Rampa neutra 100..900 ---- */
+  --color-neutral-100: #f5f5f8;
+  --color-neutral-200: #e7e7ea;
+  --color-neutral-300: #d4d4d7;
+  --color-neutral-400: #b7b7ba;
+  --color-neutral-500: #98989b;
+  --color-neutral-600: #7a7a7d;
+  --color-neutral-700: #5d5d60;
+  --color-neutral-800: #424244;
+  --color-neutral-900: #2b2b2d;
+
+  /* ---- Rampa do acento (aço) 100..900 ---- */
+  --color-accent-100: #eef6ff;
+  --color-accent-200: #d6ebff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-400: #94bce3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+  --color-accent-900: #1d2d3d;
+
+  /* ---- Rampa do acento secundário 100..900 ---- */
+  --color-accent-2-100: #eef6ff;
+  --color-accent-2-200: #d6ebff;
+  --color-accent-2-300: #bdd8f2;
+  --color-accent-2-400: #9ebbd8;
+  --color-accent-2-500: #7e9cb8;
+  --color-accent-2-600: #627d98;
+  --color-accent-2-700: #486077;
+  --color-accent-2-800: #314457;
+  --color-accent-2-900: #1f2d3a;
+
+  /* ---- Base ---- */
+  --color-bg:       #f2f2f3;
+  --color-surface:  #e9e9ea;
+  --color-text:     #1d1f20;
+  --color-accent:   #5980a6;
+  --color-accent-2: #728fab;
+
+  /* Divider derivado do texto: no tema escuro o texto inverte e a
+     hairline acompanha sozinha, sem uma segunda tabela de cor. */
+  --color-divider: color-mix(in srgb, var(--color-text) 16%, transparent);
+
+  /* Texto sobre acento sólido. Token próprio porque o tema `command`
+     inverte --color-bg para #101a24 — usar --color-bg aqui pintaria
+     texto quase preto dentro do .btn-primary no escuro. */
+  --color-accent-ink: #f2f2f3;
+
+  /* O readme do DS manda o estado pressionado clarear em fundo escuro
+     (accent-400) e escurecer em fundo claro (accent-600). Um token só,
+     trocado pelo tema, evita duplicar todo :active lá embaixo. */
+  --color-accent-pressed: var(--color-accent-600);
+
+  /* Fundo da página. Aqui é cor chapada; no tema `command` vira a
+     grade + radial (ver bloco [data-theme="command"]). */
+  --page-backdrop: none;
+
+  /* ---- Tipografia ---- */
+  --font-heading: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, sans-serif;
+  --font-heading-weight: 600;
+  /* Não é token do DS. Existe porque o HUD tem leitura numérica e o
+     stack estava repetido literal em meia dúzia de lugares. */
+  --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, monospace;
+
+  /* ---- Espaçamento: escala aritmética de 3.4px ---- */
+  --space-1: 3.4px;
+  --space-2: 6.8px;
+  --space-3: 10.2px;
+  --space-4: 13.6px;
+  --space-5: 17px;    /* 5 e 7 não vêm listados no DS; seguem o mesmo */
+  --space-6: 20.4px;
+  --space-7: 23.8px;  /* passo de 3.4px, então são derivação, não invenção */
+  --space-8: 27.2px;
+
+  /* ---- Raio: existe no token sheet, mas a camada blueprint anula
+     em .card/.btn/.input/.tag/.seg/.dialog. Sobra para o que não é
+     objeto do DS (ex.: trilha de scrollbar). ---- */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 7px;
+
+  /* ---- Elevação: só para o que flutua de verdade (dialog, popover).
+     Card não usa — card é linha. ---- */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+}
+
+/* ================================================================
+   Tema `command` — a inversão escura do DS
+
+   Não é um override solto: é o segundo tema. Os passos das rampas não
+   mudam (a escala já é neutra); mudam base, tinta e o estado pressed.
+   ================================================================ */
+/* A classe `.dark` acompanha o seletor porque o ThemeContext aplica as
+   duas coisas: `data-theme` é o contrato novo, `.dark` sobrevive para
+   `color-scheme` e para qualquer coisa legada que ainda a procure. */
+[data-theme="command"],
+.dark {
+  color-scheme: dark;
+
+  --color-bg:      #101a24;
+  --color-surface: var(--color-accent-900);
+  --color-text:    #f2f2f3;
+
+  /* 16% de tinta clara sobre fundo escuro some. 24% devolve a mesma
+     leitura de hairline que o claro tem com 16%. */
+  --color-divider: color-mix(in srgb, var(--color-text) 24%, transparent);
+
+  --color-accent-pressed: var(--color-accent-400);
+
+  /* Duas linhas de grade a 4% do accent-300, passo 34px, sobre um
+     radial que abre o topo da tela. A ordem importa: o radial é a
+     última camada, senão cobre a grade. */
+  --page-backdrop:
+    linear-gradient(color-mix(in srgb, var(--color-accent-300) 4%, transparent) 1px, transparent 1px)
+      0 0 / 34px 34px,
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent-300) 4%, transparent) 1px, transparent 1px)
+      0 0 / 34px 34px,
+    radial-gradient(120% 90% at 50% -20%, #1d2d3d 0%, #101a24 70%)
+      0 0 / 100% 100%;
+}
+
+/* ================================================================
+   Componentes
+
+   Em @layer components de propósito: assim utilitário do Tailwind
+   (que vive em @layer utilities) continua vencendo sem !important.
+   ================================================================ */
+@layer components {
+
+  /* ---- Blueprint + marcas de registro ----
+     As quatro marcas são obrigatórias em elemento emoldurado — o DS
+     trata a ausência como violação. Cada canto é um "+" feito de dois
+     pseudo-elementos de 1px, deslocado -6px para cavalgar a borda. */
+  .blueprint {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    border-radius: 0;
+  }
+  .corner {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    pointer-events: none;
+  }
+  .corner::before,
+  .corner::after {
+    content: "";
+    position: absolute;
+    background: var(--color-accent);
+  }
+  .corner::before { inset: 50% 0 auto 0; height: 1px; transform: translateY(-50%); }
+  .corner::after  { inset: 0 auto 0 50%; width: 1px; transform: translateX(-50%); }
+  .corner.tl { top: -6px; left: -6px; }
+  .corner.tr { top: -6px; right: -6px; }
+  .corner.bl { bottom: -6px; left: -6px; }
+  .corner.br { bottom: -6px; right: -6px; }
+
+  /* ---- Botão ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-divider);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+  .btn:active:not(:disabled) {
+    border-color: var(--color-accent-pressed);
+    background: color-mix(in srgb, var(--color-accent-pressed) 22%, transparent);
+  }
+
+  /* Única exceção sólida de todo o sistema. */
+  .btn-primary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-600);
+    border-color: var(--color-accent-600);
+    color: var(--color-accent-ink);
+  }
+  .btn-primary:active:not(:disabled) {
+    background: var(--color-accent-pressed);
+    border-color: var(--color-accent-pressed);
+    color: var(--color-accent-ink);
+  }
+
+  .btn-secondary { border-color: var(--color-accent); color: var(--color-accent); }
+  .btn-ghost     { border-color: transparent; }
+  .btn-ghost:hover:not(:disabled) { border-color: transparent; }
+
+  /* Quadrado: ícone Lucide stroke 1.5 dentro, sem texto. */
+  .btn-icon {
+    padding: var(--space-2);
+    aspect-ratio: 1;
+    letter-spacing: 0;
+  }
+  .btn-block { display: flex; width: 100%; }
+
+  /* ---- Tag ---- */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid transparent;
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+    color: var(--color-text);
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tag-accent {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: var(--color-accent-800);
+  }
+  .tag-neutral {
+    background: var(--color-neutral-200);
+    color: var(--color-neutral-800);
+  }
+  .tag-outline {
+    background: transparent;
+    border-color: var(--color-divider);
+    color: inherit;
+  }
+
+  /* ---- Campo ---- */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+  .field > label {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  }
+  .input {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-divider);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.4;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .input::placeholder { color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+  .input:focus { border-color: var(--color-accent); }
+
+  /* Radio: o input nativo sai da pintura (mas continua no fluxo de
+     foco e de teclado) e quem desenha é o .dot ao lado. */
+  .radio {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .radio input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .radio .dot {
+    position: relative;
+    width: 11px;
+    height: 11px;
+    flex: none;
+    border: 1px solid var(--color-divider);
+    transition: border-color 0.15s ease;
+  }
+  .radio input:checked + .dot { border-color: var(--color-accent); }
+  .radio input:checked + .dot::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    background: var(--color-accent);
+  }
+  .radio input:focus-visible + .dot {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* ---- Segmentado ---- */
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--color-divider);
+  }
+  .seg-opt {
+    padding: var(--space-1) var(--space-3);
+    border: 0;
+    border-right: 1px solid var(--color-divider);
+    background: transparent;
+    color: color-mix(in srgb, var(--color-text) 70%, transparent);
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .seg-opt:last-child { border-right: 0; }
+  .seg-opt:hover:not(:disabled) { color: var(--color-text); }
+  /* Aceita os dois contratos: aria-selected (tablist) e a classe. */
+  .seg-opt[aria-selected="true"],
+  .seg-opt.is-on {
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+
+  /* ---- Card ---- */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--color-divider);
+    background: transparent;
+  }
+  .card-kicker {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+  .card-title {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 19px;
+    line-height: 1.1;
+  }
+  .card-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--color-text) 78%, transparent);
+  }
+  .card-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+
+  /* ---- Elevação avulsa ---- */
+  .elev-sm { box-shadow: var(--shadow-sm); }
+  .elev-md { box-shadow: var(--shadow-md); }
+  .elev-lg { box-shadow: var(--shadow-lg); }
+
+  /* ---- Navegação ---- */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .nav-brand {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 16px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* ---- Tabela ---- */
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .table th {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-divider);
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: left;
+    color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  }
+  .table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-divider);
+    vertical-align: top;
+  }
+  .table tbody tr:hover { background: color-mix(in srgb, var(--color-accent) 7%, transparent); }
+
+  /* ---- Diálogo ----
+     O card do diálogo é transparente por regra do DS, então quem
+     garante leitura é o backdrop: quase opaco na cor da página. */
+  .dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  .dialog {
+    width: 100%;
+    max-width: 520px;
+    padding: var(--space-6);
+    border: 1px solid var(--color-divider);
+    background: transparent;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* ---- Régua ---- */
+  .hr {
+    height: 0;
+    border: 0;
+    border-top: 1px solid var(--color-divider);
+    margin: var(--space-4) 0;
+  }
+
+  /* ---- Duotone: imagem entra na paleta em vez de brigar com ela ---- */
+  .duotone { position: relative; display: block; overflow: hidden; }
+  .duotone > img,
+  .duotone > svg { display: block; width: 100%; filter: grayscale(1) contrast(1.06); }
+  .duotone::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--color-accent);
+    mix-blend-mode: color;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* ---- Estados comuns ---- */
+  .btn:disabled,
+  .input:disabled,
+  .seg-opt:disabled,
+  .radio input:disabled + .dot,
+  [aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ================================================================
+     Camada blueprint — vem por último de propósito.
+     Zera raio e preenchimento depois de qualquer variante acima. É a
+     regra dura do DS: canto arredondado ou card sólido é violação.
+     ================================================================ */
+  .card, .btn, .input, .tag, .seg, .dialog { border-radius: 0; }
+  .card, .dialog { background: transparent; border: 1px solid var(--color-divider); }
+
+  /* ---- Ajustes do tema escuro ----
+     Rampa 700/800 em texto some sobre #101a24; no escuro o passo
+     claro é que carrega a leitura (ver A.3 do PLANOS). */
+  [data-theme="command"] .tag-accent,
+  .dark .tag-accent { color: var(--color-accent-200); }
+  [data-theme="command"] .tag-neutral,
+  .dark .tag-neutral {
+    background: color-mix(in srgb, var(--color-text) 12%, transparent);
+    color: var(--color-neutral-200);
+  }
+  [data-theme="command"] .card-kicker,
+  .dark .card-kicker { color: var(--color-accent-300); }
+}
+
+/* ---- Foco e seleção: fora do @layer para não perder de utilitário ---- */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-text);
+}

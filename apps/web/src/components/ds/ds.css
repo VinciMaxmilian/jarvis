@@ -1,0 +1,403 @@
+/*
+ * ds.css — estilo dos primitivos que a camada "Industry" (styles/industry.css)
+ * nao cobre. Tudo aqui e prefixado com `ds-` para nunca colidir com as classes
+ * do design system, que sao de outro dono.
+ *
+ * Regra de ouro do Plano A: nenhum hex, nenhum px de espacamento, nenhum nome
+ * de fonte literal fora do token sheet. Duas excecoes conscientes, ambas
+ * declaradas UMA vez aqui e consumidas sempre via var():
+ *   1. a pilha monoespacada — o token sheet nao expoe --font-mono;
+ *   2. a espessura do fio (hairline) — o token sheet nao expoe largura de borda.
+ * Tamanhos de texto usam rem (nao px) porque tambem nao ha escala tipografica
+ * em token e rem respeita o zoom do usuario.
+ */
+
+:root {
+  /* Numero de HUD precisa de largura fixa: sem mono o valor "pula" a cada
+     atualizacao e o painel treme. Fallback encadeado caso o DS venha a
+     publicar --font-mono depois — ai o token dele ganha sem tocar aqui. */
+  --ds-font-mono: var(--font-mono, ui-monospace, "SFMono-Regular", "Consolas", "Liberation Mono", monospace);
+
+  /* Estado de alerta (Meter acima do limite, erro de campo, evento critico).
+     O token sheet nao tem cor de perigo dedicada; o segundo acento e o unico
+     canal cromatico livre para "atencao" sem inventar hex. */
+  --ds-alert: var(--color-accent-2-600, var(--color-accent));
+
+  /* Fio do blueprint. Unico px do arquivo, e de borda, nao de espacamento. */
+  --ds-hairline: 1px;
+}
+
+/* ---------------------------------------------------------------- icones -- */
+
+/* Regra do DS: icone Lucide sempre stroke 1.5. Como o icone chega por prop
+   (ReactNode) e nao por import, forcamos aqui em vez de confiar em quem chama. */
+.ds-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ds-icon > svg {
+  width: 1em;
+  height: 1em;
+  stroke-width: 1.5;
+}
+
+/* ----------------------------------------------------------------- Panel -- */
+
+/* O padding vem de .card (DS). Aqui so o empilhamento cabecalho/corpo. */
+.ds-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: relative;
+}
+
+/* Painel que precisa preencher a celula do grid do cockpit. */
+.ds-panel-fill {
+  height: 100%;
+}
+
+.ds-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ds-panel-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ds-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* min-width:0 impede que tabela larga estoure o grid em vez de rolar. */
+.ds-panel-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* --------------------------------------------------------------- Readout -- */
+
+.ds-readout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-readout-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.ds-readout-value.is-accent {
+  color: var(--color-accent);
+}
+
+.ds-readout-value.is-alert {
+  color: var(--ds-alert);
+}
+
+.ds-readout-unit {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.ds-readout-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Indicador "vivo": quadrado, nunca circulo — o blueprint nao arredonda. */
+.ds-live {
+  display: inline-block;
+  width: var(--space-2);
+  height: var(--space-2);
+  background: var(--color-accent);
+  animation: ds-blink 1.6s steps(2, end) infinite;
+}
+
+.ds-live.is-alert {
+  background: var(--ds-alert);
+}
+
+/* ------------------------------------------------------------------ Stat -- */
+
+.ds-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-stat-value.is-accent {
+  color: var(--color-accent);
+}
+
+.ds-stat-value.is-alert {
+  color: var(--ds-alert);
+}
+
+.ds-stat-unit {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+/* ----------------------------------------------------------------- Meter -- */
+
+.ds-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ds-meter-value {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+/* Trilho transparente com fio: barra cheia seria "superficie", e o DS proibe. */
+.ds-meter-track {
+  position: relative;
+  height: var(--space-2);
+  border: var(--ds-hairline) solid var(--color-divider);
+  background: transparent;
+  overflow: hidden;
+}
+
+.ds-meter-fill {
+  display: block;
+  height: 100%;
+  width: var(--ds-meter-value, 0%);
+  background: var(--color-accent);
+  transform-origin: left center;
+  animation: ds-bar 0.6s ease-out both;
+}
+
+.ds-meter.is-alert .ds-meter-fill {
+  background: var(--ds-alert);
+}
+
+.ds-meter.is-alert .ds-meter-value {
+  color: var(--ds-alert);
+}
+
+/* ------------------------------------------------------------------ Feed -- */
+
+.ds-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.ds-feed-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  animation: ds-creep 0.28s ease-out both;
+}
+
+.ds-feed-time {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.ds-feed-body {
+  min-width: 0;
+}
+
+.ds-feed-label {
+  overflow-wrap: anywhere;
+}
+
+.ds-feed-item.is-accent .ds-feed-label {
+  color: var(--color-accent);
+}
+
+.ds-feed-item.is-alert .ds-feed-label {
+  color: var(--ds-alert);
+}
+
+/* Evento de baixa relevancia: rebaixa sem inventar uma cor nova. */
+.ds-feed-item.is-muted {
+  opacity: 0.65;
+}
+
+.ds-feed-detail {
+  display: block;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.ds-feed-empty {
+  padding: var(--space-2) 0;
+}
+
+/* ----------------------------------------------------------------- Field -- */
+
+.ds-field-hint,
+.ds-field-error {
+  font-size: 0.75rem;
+}
+
+.ds-field-error {
+  color: var(--ds-alert);
+}
+
+/* ------------------------------------------------------------- DataTable -- */
+
+/* Tabela larga rola dentro do painel; o body da pagina nunca rola na horizontal. */
+.ds-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.ds-table-empty {
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.ds-align-right {
+  text-align: right;
+}
+
+.ds-align-center {
+  text-align: center;
+}
+
+.ds-num {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-row-clickable {
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- Dialog -- */
+
+/* Especificidade dupla (.dialog-backdrop.ds-dialog-backdrop) de proposito: o
+   arquivo do DS pode ser carregado depois deste, e o posicionamento do modal
+   nao pode depender da ordem dos imports. */
+.dialog-backdrop.ds-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 100;
+}
+
+.dialog.ds-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 34rem;
+  max-height: 85vh;
+  overflow: auto;
+  animation: ds-creep 0.2s ease-out both;
+}
+
+.ds-dialog-body {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- animacoes -- */
+
+@keyframes ds-creep {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-2) * -1));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ds-bar {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ds-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* Criterio de aceite A.8: prefers-reduced-motion desliga tudo. Cada animacao
+   aqui so faz entrada/crescimento, entao remove-la deixa o estado final
+   correto — nada fica invisivel nem pela metade. */
+@media (prefers-reduced-motion: reduce) {
+  .ds-feed-item,
+  .ds-meter-fill,
+  .ds-live,
+  .dialog.ds-dialog {
+    animation: none;
+  }
+}

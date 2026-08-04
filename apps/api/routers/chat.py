@@ -45,14 +45,13 @@ async def chat_post(
     email = request.scope.get("cf_access_claims", {}).get("email", "Usuário Local")
 
     if body.message.strip():
-        llm = await get_llm_provider(session)
         history_store = get_chat_history_store()
         asyncio.create_task(
             index_conversation_message(
                 message_text=body.message,
                 conversation_id=conv_id,
                 message_id=uuid4().hex,
-                provider=llm,
+                provider=chief._embed_llm,
                 vector_store=history_store,
                 source=email
             )
@@ -100,14 +99,13 @@ async def chat_ws(websocket: WebSocket) -> None:
                     
                     # Indexação assíncrona (fogo e esquece) do user_msg
                     if user_msg.strip():
-                        llm = await get_llm_provider(session)
                         history_store = get_chat_history_store()
                         asyncio.create_task(
                             index_conversation_message(
                                 message_text=user_msg,
                                 conversation_id=conv_id,
                                 message_id=uuid4().hex,
-                                provider=llm,
+                                provider=chief._embed_llm,
                                 vector_store=history_store,
                                 source=email
                             )

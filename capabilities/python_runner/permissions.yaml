@@ -1,0 +1,6 @@
+# Permissões requeridas pelo python_runner.
+# Sem a raiz do filesystem, não tem cwd válido.
+filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis/data/workspace
+process: true
+network: []

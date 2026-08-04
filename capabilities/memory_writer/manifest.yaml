@@ -1,0 +1,36 @@
+name: memory_writer
+version: 0.1.0
+description: Guarda anotações, fatos e preferências na base de conhecimento.
+status: pending_approval
+entrypoint: capabilities.memory_writer.backend.handlers:main
+runtime: python
+permissions:
+  network: []
+  filesystem: []
+  process: false
+tools:
+- name: memory_save
+  description: Grava uma anotação de forma permanente.
+  idempotent: false
+  requires_approval: true
+  input_schema:
+    type: object
+    required: [anotacao]
+    properties:
+      anotacao:
+        type: string
+        description: Informação a ser guardada.
+        minLength: 1
+  output_schema:
+    type: object
+    required: [sucesso, caminho]
+    properties:
+      sucesso:
+        type: boolean
+      caminho:
+        type: string
+trigger_intents:
+- salvar uma anotação
+- lembrar de um fato
+- guardar preferência
+dependencies: []

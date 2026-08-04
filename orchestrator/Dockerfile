@@ -26,6 +26,9 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # venv em /opt/venv, fora de /app: o volume de código do dev não enterra as deps.
 RUN python -m venv /opt/venv
 
+# webrtcvad precisa de compilador C
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc g++ python3-dev && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Camada de dependência: só o manifesto, para editar código não reinstalar nada.

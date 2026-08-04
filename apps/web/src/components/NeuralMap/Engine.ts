@@ -27,45 +27,263 @@ export interface GraphLink {
 
 export type Theme = 'light' | 'dark';
 
-/* ---------------------------------------------------------------- *
- * Paletas — a clara é a mesma família de matizes, só que rebaixada
- * em luminosidade para sobreviver ao fundo neumórfico.
- * ---------------------------------------------------------------- */
-const PAL_DARK = ["#00e5ff","#ffb020","#4d9dff","#00ffc8","#b06bff","#ff7a3d","#7dff6f","#ff5c8a"];
-const PAL_LIGHT = ["#0088a8","#a86a00","#2f66cc","#00806a","#6f3fc0","#c2480f","#3f8f28","#c01a54"];
+/* ================================================================ *
+ * PALETA
+ *
+ * O canvas não consegue ler `var(--x)`: `ctx.fillStyle` precisa de uma
+ * cor concreta. Então o Engine não conhece mais nenhuma cor literal —
+ * ele recebe uma `PaletaGrafo` já resolvida. Quem resolve é
+ * `paletaDoTema()`, que lê as CSS custom properties do documento em
+ * runtime e cai nos literais de `FALLBACK` quando o token não existe.
+ *
+ * Consequência: enquanto os tokens Industry não estiverem no CSS, o
+ * desenho fica pixel-a-pixel igual ao de hoje; quando entrarem, o
+ * canvas acompanha o tema sem o Engine importar uma linha de CSS.
+ * ================================================================ */
+
+export interface PaletaGrafo {
+  /** Rampa categórica por comunidade. Sempre `#rrggbb` — `hex2rgb` depende disso. */
+  comunidades: string[];
+  /** Gradiente radial de fundo: centro → meio → borda. Cores CSS completas. */
+  fundo: [string, string, string];
+
+  /* Daqui pra baixo: tripla `"r, g, b"`. O laço de desenho monta o
+   * `rgba()` com o alfa que ele já calcula por frame — o alfa é peso
+   * visual, não cor, e por isso continua no código de desenho. */
+  /** Anéis orbitais de fundo e varredura. */
+  anel: string;
+  /** Aresta normal + halo do nó selecionado. */
+  aresta: string;
+  /** Aresta `confidence === "INFERRED"` (tracejada). */
+  arestaInferida: string;
+  /** Aresta `confidence === "AMBIGUOUS"` (tracejada). */
+  arestaAmbigua: string;
+  /** Aresta apagada do modo fundo. */
+  arestaApagada: string;
+  /** Miolo claro do nó. */
+  nucleoNo: string;
+  /** Miolo do nó quando dessaturado (modo fundo, nó inativo). */
+  nucleoCinza: string;
+  /** Arco pulsante do god node. */
+  anelGod: string;
+  /** Rótulo de lobo quando dessaturado (modo fundo). */
+  rotuloAreaCinza: string;
+
+  /* Cores CSS completas — o alfa aqui é fixo e faz parte da cor. */
+  /** Tarja atrás do rótulo do nó. */
+  rotuloFundo: string;
+  /** Texto do rótulo em destaque (selecionado / hover / ativo). */
+  rotuloTexto: string;
+}
 
 const hex2rgb = (h: string): [number, number, number] => [
   parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
 ];
 
-const THEME = {
+const rgb2hex = ([r, g, b]: [number, number, number]): string =>
+  '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+
+/* Fallback: exatamente as cores que o Engine usava embutidas. A clara é
+ * a mesma família de matizes da escura, só que rebaixada em luminosidade
+ * para sobreviver ao fundo neumórfico. */
+const PAL_DARK = ["#00e5ff","#ffb020","#4d9dff","#00ffc8","#b06bff","#ff7a3d","#7dff6f","#ff5c8a"];
+const PAL_LIGHT = ["#0088a8","#a86a00","#2f66cc","#00806a","#6f3fc0","#c2480f","#3f8f28","#c01a54"];
+
+const FALLBACK: Record<Theme, PaletaGrafo> = {
   light: {
-    pal: PAL_LIGHT,
-    bg: ["#f4f6fa", "#e8ebf2", "#dde1ea"],
-    ring: "18, 70, 110",
-    edge: "40, 90, 140",
-    inferred: "170, 110, 0",
-    ambiguous: "200, 30, 70",
-    muted: "120, 130, 145",
-    core: "255, 255, 255",
-    labelBg: "rgba(255,255,255,.86)",
-    labelFg: "#1b2028",
-    godRing: "190, 130, 0",
+    comunidades: PAL_LIGHT,
+    fundo: ["#f4f6fa", "#e8ebf2", "#dde1ea"],
+    anel: "18, 70, 110",
+    aresta: "40, 90, 140",
+    arestaInferida: "170, 110, 0",
+    arestaAmbigua: "200, 30, 70",
+    arestaApagada: "120, 130, 145",
+    nucleoNo: "255, 255, 255",
+    nucleoCinza: "160, 160, 160",
+    anelGod: "190, 130, 0",
+    rotuloAreaCinza: "140, 140, 140",
+    rotuloFundo: "rgba(255,255,255,.86)",
+    rotuloTexto: "#1b2028",
   },
   dark: {
-    pal: PAL_DARK,
-    bg: ["#061722", "#030b13", "#02060c"],
-    ring: "55, 224, 255",
-    edge: "55, 224, 255",
-    inferred: "255, 176, 32",
-    ambiguous: "255, 84, 112",
-    muted: "120, 120, 120",
-    core: "235, 253, 255",
-    labelBg: "rgba(2,8,14,.72)",
-    labelFg: "#eafcff",
-    godRing: "255, 176, 32",
+    comunidades: PAL_DARK,
+    fundo: ["#061722", "#030b13", "#02060c"],
+    anel: "55, 224, 255",
+    aresta: "55, 224, 255",
+    arestaInferida: "255, 176, 32",
+    arestaAmbigua: "255, 84, 112",
+    arestaApagada: "120, 120, 120",
+    nucleoNo: "235, 253, 255",
+    nucleoCinza: "160, 160, 160",
+    anelGod: "255, 176, 32",
+    rotuloAreaCinza: "140, 140, 140",
+    rotuloFundo: "rgba(2,8,14,.72)",
+    rotuloTexto: "#eafcff",
   },
-} as const;
+};
+
+/* ---------------------------------------------------------------- *
+ * Resolução de cor CSS → rgb
+ * ---------------------------------------------------------------- */
+
+let sonda: CanvasRenderingContext2D | null | undefined;
+function sondaCtx(): CanvasRenderingContext2D | null {
+  if (sonda !== undefined) return sonda;
+  if (typeof document === 'undefined') { sonda = null; return sonda; }
+  const cv = document.createElement('canvas');
+  cv.width = 1; cv.height = 1;
+  sonda = cv.getContext('2d', { willReadFrequently: true });
+  return sonda;
+}
+
+function pintar(c: CanvasRenderingContext2D, sentinela: string, valor: string): [number, number, number] {
+  c.fillStyle = sentinela;
+  c.fillStyle = valor;          // valor inválido não altera fillStyle
+  c.clearRect(0, 0, 1, 1);
+  c.fillRect(0, 0, 1, 1);
+  const d = c.getImageData(0, 0, 1, 1).data;
+  return [d[0], d[1], d[2]];
+}
+
+const cacheRgb = new Map<string, [number, number, number] | null>();
+
+/**
+ * Converte qualquer cor que o browser aceite — hex, `rgb()`, `hsl()`,
+ * `oklch()`, `color-mix()` — para `[r,g,b]`. Rasteriza 1 pixel porque é
+ * o único caminho que não depende de a serialização computada ser sRGB
+ * (os tokens do Industry são OKLCH). Duas sentinelas diferentes detectam
+ * valor inválido: se `fillStyle` não mudou, as leituras divergem.
+ * Só roda na troca de tema, e ainda assim com cache.
+ */
+function cssParaRgb(valor: string): [number, number, number] | null {
+  const v = valor.trim();
+  if (!v) return null;
+  const emCache = cacheRgb.get(v);
+  if (emCache !== undefined) return emCache;
+
+  const c = sondaCtx();
+  let res: [number, number, number] | null = null;
+  if (c) {
+    const a = pintar(c, '#000000', v);
+    const b = pintar(c, '#ffffff', v);
+    if (a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) res = a;
+  }
+  cacheRgb.set(v, res);
+  return res;
+}
+
+/** Primeiro token da lista que resolver, já como `"r, g, b"`. */
+function tokenRgb(d: CSSStyleDeclaration, nomes: string[], padrao: string): string {
+  for (const nome of nomes) {
+    const rgb = cssParaRgb(d.getPropertyValue(nome));
+    if (rgb) return rgb.join(', ');
+  }
+  return padrao;
+}
+
+/** Idem, mas normalizado para `#rrggbb` (o que `hex2rgb` sabe ler). */
+function tokenHex(d: CSSStyleDeclaration, nomes: string[], padrao: string): string {
+  for (const nome of nomes) {
+    const rgb = cssParaRgb(d.getPropertyValue(nome));
+    if (rgb) return rgb2hex(rgb);
+  }
+  return padrao;
+}
+
+const misturarHex = (a: string, b: string, t: number): string => {
+  const x = hex2rgb(a), y = hex2rgb(b);
+  return rgb2hex([
+    Math.round(x[0] + (y[0] - x[0]) * t),
+    Math.round(x[1] + (y[1] - x[1]) * t),
+    Math.round(x[2] + (y[2] - x[2]) * t),
+  ]);
+};
+
+function raizPadrao(raiz?: HTMLElement): HTMLElement | null {
+  if (raiz) return raiz;
+  return typeof document !== 'undefined' ? document.documentElement : null;
+}
+
+/**
+ * Qual variante o documento está pedindo. Ordem: `data-theme` explícito,
+ * classe `dark`/`light`, e por último a luminância real de `--color-bg`
+ * (ou `--neu-bg`) — esse último degrau faz o canvas acertar mesmo que o
+ * design system troque o nome do tema.
+ */
+export function temaEfetivo(raiz?: HTMLElement): Theme {
+  const el = raizPadrao(raiz);
+  if (!el) return 'light';
+
+  const marca = (el.getAttribute('data-theme') || '').toLowerCase();
+  if (/dark|command|escuro|noite/.test(marca)) return 'dark';
+  if (/light|industry|claro/.test(marca)) return 'light';
+
+  if (el.classList.contains('dark')) return 'dark';
+  if (el.classList.contains('light')) return 'light';
+
+  const d = getComputedStyle(el);
+  const rgb = cssParaRgb(d.getPropertyValue('--color-bg'))
+    ?? cssParaRgb(d.getPropertyValue('--neu-bg'));
+  if (rgb) return (rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114) < 128 ? 'dark' : 'light';
+
+  return 'light';
+}
+
+/**
+ * Monta a paleta a partir dos tokens do tema. Cada campo tem uma cadeia
+ * de candidatos: token semântico → passo de rampa → literal de
+ * `FALLBACK`. Nada aqui quebra se o CSS ainda não tiver os tokens.
+ *
+ * Os papéis sem token equivalente no DS (inferida = âmbar, ambígua =
+ * vermelho, anel do god node) aceitam um override opcional `--graph-*`
+ * e só então caem no literal — o Industry não define cor semântica de
+ * aviso/erro, e inventar uma a partir do acento apagaria a distinção.
+ */
+export function paletaDoTema(tema: Theme, raiz?: HTMLElement): PaletaGrafo {
+  const fb = FALLBACK[tema];
+  const el = raizPadrao(raiz);
+  if (!el) return fb;
+  const d = getComputedStyle(el);
+
+  const claro = tema === 'light';
+  // O DS avisa que o acento puro tem ~3:1: no escuro usa-se o passo claro.
+  const passoAcento = claro ? '--color-accent-700' : '--color-accent-400';
+
+  // Comunidades: o Industry não tem rampa categórica (a dele é
+  // monocromática). Manter os matizes atuais é o que preserva a leitura
+  // do grafo; `--graph-comunidade-N` fica como porta de entrada.
+  const comunidades = fb.comunidades.map((hex, i) =>
+    tokenHex(d, [`--graph-comunidade-${i + 1}`], hex));
+
+  const centro = tokenHex(d, ['--color-surface'], fb.fundo[0]);
+  const borda = tokenHex(d, ['--color-bg'], fb.fundo[2]);
+  const meio = (centro === fb.fundo[0] && borda === fb.fundo[2])
+    ? fb.fundo[1]                       // sem tokens: gradiente original intacto
+    : misturarHex(centro, borda, 0.5);
+
+  const fundoRgb = cssParaRgb(d.getPropertyValue('--color-bg'));
+  const rotuloFundo = fundoRgb
+    ? `rgba(${fundoRgb.join(',')},${claro ? '.86' : '.72'})`
+    : fb.rotuloFundo;
+
+  return {
+    comunidades,
+    fundo: [centro, meio, borda],
+    anel: tokenRgb(d, ['--graph-anel', passoAcento, '--color-accent'], fb.anel),
+    aresta: tokenRgb(d, ['--graph-aresta', '--color-accent'], fb.aresta),
+    arestaInferida: tokenRgb(d, ['--graph-aresta-inferida'], fb.arestaInferida),
+    arestaAmbigua: tokenRgb(d, ['--graph-aresta-ambigua'], fb.arestaAmbigua),
+    arestaApagada: tokenRgb(d, ['--color-neutral-500', '--color-divider'], fb.arestaApagada),
+    // 100 é o passo mais claro da rampa nos dois temas — é o que faz o
+    // miolo do nó brilhar tanto no claro quanto no escuro.
+    nucleoNo: tokenRgb(d, ['--graph-nucleo', '--color-neutral-100'], fb.nucleoNo),
+    nucleoCinza: tokenRgb(d, ['--color-neutral-400'], fb.nucleoCinza),
+    anelGod: tokenRgb(d, ['--graph-god'], fb.anelGod),
+    rotuloAreaCinza: tokenRgb(d, ['--color-neutral-500', '--color-divider'], fb.rotuloAreaCinza),
+    rotuloFundo,
+    rotuloTexto: tokenHex(d, ['--color-text'], fb.rotuloTexto),
+  };
+}
 
 export const LOBES = [
   { p: "apps/web", x: -800, y: 0, z: -800, n: "Frontend (Web)" },
@@ -131,7 +349,7 @@ export class NeuralEngine {
   private raf = 0;
   private lastTs = 0;
   private running = false;
-  private th: typeof THEME[Theme];
+  private pal: PaletaGrafo;
   private reduceMotion = false;
 
   // buffers reaproveitados — nada disso pode alocar dentro do laço de render
@@ -182,22 +400,19 @@ export class NeuralEngine {
     this.wake();
   }
 
-  constructor(canvas: HTMLCanvasElement, rawData: any, theme: Theme = 'light') {
+  /** Aceita a paleta pronta ou o nome do tema (resolvido na hora). */
+  constructor(canvas: HTMLCanvasElement, rawData: any, paleta: Theme | PaletaGrafo = 'light') {
     this.cv = canvas;
     const context = canvas.getContext('2d', { alpha: true, desynchronized: true });
     if (!context) throw new Error("Could not get 2D context");
     this.ctx = context;
 
-    this.th = THEME[theme];
+    this.pal = typeof paleta === 'string' ? paletaDoTema(paleta) : paleta;
     this.reduceMotion = typeof matchMedia === 'function'
       && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     for (let i = 0; i < BUCKETS; i++) this.bucket.push([]);
-    this.grayLevel = this.th.pal.map(h => {
-      const [r, g, b] = hex2rgb(h);
-      return Math.round(r * 0.299 + g * 0.587 + b * 0.114);
-    });
-    this.palRgb = this.th.pal.map(h => hex2rgb(h).join(','));
+    this.derivarCache();
 
     this.initData(rawData);
     this.setupEvents();
@@ -253,16 +468,33 @@ export class NeuralEngine {
     this.wake();
   }
 
-  public setTheme(theme: Theme) {
-    this.th = THEME[theme];
-    this.grayLevel = this.th.pal.map(h => {
+  /** Caches derivados da paleta — nada disso pode ser recalculado por frame. */
+  private derivarCache() {
+    this.grayLevel = this.pal.comunidades.map(h => {
       const [r, g, b] = hex2rgb(h);
-      return 0.299 * r + 0.587 * g + 0.114 * b;
+      return Math.round(r * 0.299 + g * 0.587 + b * 0.114);
     });
-    this.palRgb = this.th.pal.map(h => hex2rgb(h).join(','));
+    this.palRgb = this.pal.comunidades.map(h => hex2rgb(h).join(','));
+  }
+
+  /**
+   * Ponto único de troca de cor. Invalida o gradiente de fundo e os
+   * sprites de brilho (que são assados com a cor da comunidade) e
+   * reacende a animação para o próximo frame já sair no tema novo.
+   */
+  public aplicarPaleta(paleta: PaletaGrafo) {
+    this.pal = paleta;
+    this.derivarCache();
+    const com = this.pal.comunidades;
+    for (const n of this.nodes) n.c = com[n.ci];   // FileExplorer lê `n.c`
     this.bgGrad = null;
     this.sprites.clear();
     this.wake();
+  }
+
+  /** Atalho: resolve a paleta do tema a partir do CSS e aplica. */
+  public setTheme(theme: Theme) {
+    this.aplicarPaleta(paletaDoTema(theme));
   }
 
   public selectNode(n: GraphNode | null) {
@@ -297,7 +529,7 @@ export class NeuralEngine {
   private initData(GRAPH: any) {
     this.lobes = GRAPH.lobes || LOBES;
     const getLobe = (path: string) => this.lobes.find(l => path.includes(l.p)) || { p: "", x: 0, y: 0, z: 0, n: "Core" };
-    const pal = this.th.pal;
+    const pal = this.pal.comunidades;
 
     this.nodes = (GRAPH.nodes || []).map((n: any) => {
       const ci = (n.community | 0) % pal.length;
@@ -518,7 +750,7 @@ export class NeuralEngine {
     const S = 128, cv = document.createElement('canvas');
     cv.width = S; cv.height = S;
     const c = cv.getContext('2d')!;
-    let rgb = hex2rgb(this.th.pal[ci]);
+    let rgb = hex2rgb(this.pal.comunidades[ci]);
     if (gray) {
       const g = Math.round(rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114);
       rgb = [g, g, g];
@@ -541,7 +773,7 @@ export class NeuralEngine {
     const S = 256, cv = document.createElement('canvas');
     cv.width = S; cv.height = S;
     const c = cv.getContext('2d')!;
-    let rgb = hex2rgb(this.th.pal[ci]);
+    let rgb = hex2rgb(this.pal.comunidades[ci]);
     if (gray) {
       const g = Math.round(rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114);
       rgb = [g, g, g];
@@ -592,7 +824,7 @@ export class NeuralEngine {
 
     this.step();
 
-    const W = this.W, H = this.H, ctx = this.ctx, th = this.th;
+    const W = this.W, H = this.H, ctx = this.ctx, pal = this.pal;
     const bg = this._backgroundMode;
 
     // Culling: fora da tela (com margem) não entra em nenhum laço de desenho.
@@ -614,7 +846,7 @@ export class NeuralEngine {
     if (!bg) {
       if (!this.bgGrad) {
         const g = ctx.createRadialGradient(W / 2, H * 0.48, 0, W / 2, H * 0.48, Math.max(W, H) * 0.62);
-        g.addColorStop(0, th.bg[0]); g.addColorStop(0.55, th.bg[1]); g.addColorStop(1, th.bg[2]);
+        g.addColorStop(0, pal.fundo[0]); g.addColorStop(0.55, pal.fundo[1]); g.addColorStop(1, pal.fundo[2]);
         this.bgGrad = g;
       }
       ctx.fillStyle = this.bgGrad;
@@ -628,12 +860,12 @@ export class NeuralEngine {
       const rr = (230 + i * 95) * this.zoom;
       ctx.beginPath();
       ctx.ellipse(0, 0, rr, rr * 0.30, Math.sin(this.t * 0.13 + i) * 0.09, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(${th.ring},${0.08 - i * 0.02})`;
+      ctx.strokeStyle = `rgba(${pal.anel},${0.08 - i * 0.02})`;
       ctx.stroke();
     }
     ctx.beginPath();
     ctx.arc(0, 0, 332 * this.zoom, -this.t * 0.17 + 3, -this.t * 0.17 + 3.7);
-    ctx.strokeStyle = `rgba(${th.ring},.2)`;
+    ctx.strokeStyle = `rgba(${pal.anel},.2)`;
     ctx.stroke();
     ctx.restore();
 
@@ -668,10 +900,10 @@ export class NeuralEngine {
     ctx.textBaseline = "middle";
     for (const l of list) {
       const r = 320 * l.sc;
-      const ci = l.i % this.th.pal.length;
+      const ci = l.i % this.pal.comunidades.length;
       ctx.drawImage(this.areaSprite(ci, gray), l.sx - r, l.sy - r, r * 2, r * 2);
       ctx.font = `bold ${Math.max(12, 18 * l.sc)}px Consolas,Menlo,monospace`;
-      ctx.fillStyle = gray ? 'rgba(140,140,140,0.4)' : `rgba(${this.palRgb[ci]},0.85)`;
+      ctx.fillStyle = gray ? `rgba(${this.pal.rotuloAreaCinza},0.4)` : `rgba(${this.palRgb[ci]},0.85)`;
       ctx.fillText(l.n, l.sx, l.sy - r * 0.1);
     }
   }
@@ -679,7 +911,7 @@ export class NeuralEngine {
   /* Antes: 2740 beginPath/stroke por frame. Agora as arestas são agrupadas por
    * (tipo, alfa quantizado, espessura quantizada) e saem em ~10-30 strokes. */
   private drawEdges(fset: Set<string> | null) {
-    const ctx = this.ctx, th = this.th, bg = this._backgroundMode;
+    const ctx = this.ctx, pal = this.pal, bg = this._backgroundMode;
     const buckets = this.bucket, used = this.bucketUsed;
     used.length = 0;
 
@@ -725,7 +957,7 @@ export class NeuralEngine {
       const al = decodeA((rem / QUANT_W) | 0);
       const w = decodeW(rem % QUANT_W);
 
-      const rgb = kind === 2 ? th.ambiguous : kind === 1 ? th.inferred : kind === 3 ? th.muted : th.edge;
+      const rgb = kind === 2 ? pal.arestaAmbigua : kind === 1 ? pal.arestaInferida : kind === 3 ? pal.arestaApagada : pal.aresta;
       ctx.strokeStyle = `rgba(${rgb},${kind === 1 ? al * 0.8 : al})`;
       ctx.lineWidth = w;
       if (kind === 1 || kind === 2) ctx.setLineDash([3, 4]); else ctx.setLineDash([]);
@@ -742,7 +974,7 @@ export class NeuralEngine {
   }
 
   private drawNodes(order: GraphNode[], fset: Set<string> | null) {
-    const ctx = this.ctx, th = this.th, bg = this._backgroundMode;
+    const ctx = this.ctx, pal = this.pal, bg = this._backgroundMode;
 
     for (const n of order) {
       const active = n.act;
@@ -770,7 +1002,7 @@ export class NeuralEngine {
         const g = this.grayLevel[n.ci];
         ctx.fillStyle = `rgba(${g},${g},${g},${Math.min(1, a * 1.25)})`;
       } else {
-        ctx.fillStyle = th.pal[n.ci];
+        ctx.fillStyle = pal.comunidades[n.ci];
         ctx.globalAlpha = Math.min(1, a * 1.25);
       }
       ctx.beginPath();
@@ -779,8 +1011,8 @@ export class NeuralEngine {
       ctx.globalAlpha = 1;
 
       ctx.fillStyle = gray
-        ? `rgba(160,160,160,${a * 0.5})`
-        : `rgba(${th.core},${a * 0.85})`;
+        ? `rgba(${pal.nucleoCinza},${a * 0.5})`
+        : `rgba(${pal.nucleoNo},${a * 0.85})`;
       ctx.beginPath();
       ctx.arc(n.sx, n.sy, r * 0.42, 0, Math.PI * 2);
       ctx.fill();
@@ -788,7 +1020,7 @@ export class NeuralEngine {
       // Cada arco precisa de um moveTo próprio: sem ele o canvas liga o fim de
       // um subcaminho ao início do próximo com um segmento reto.
       if (n.god && a > 0.2 && !bg) {
-        ctx.strokeStyle = `rgba(${th.godRing},${0.32 + 0.2 * Math.sin(this.t * 1.7 + n.deg)})`;
+        ctx.strokeStyle = `rgba(${pal.anelGod},${0.32 + 0.2 * Math.sin(this.t * 1.7 + n.deg)})`;
         ctx.lineWidth = 1;
         const A0 = this.t * 0.9 + n.deg, RR = r * 2.1;
         ctx.beginPath();
@@ -801,7 +1033,7 @@ export class NeuralEngine {
       }
 
       if (n === this.sel || active) {
-        ctx.strokeStyle = active ? th.pal[n.ci] : `rgba(${th.edge},.85)`;
+        ctx.strokeStyle = active ? pal.comunidades[n.ci] : `rgba(${pal.aresta},.85)`;
         ctx.lineWidth = active ? 2.5 : 1;
         const RR = r + (active ? 8 : 13);
         ctx.beginPath();
@@ -816,7 +1048,7 @@ export class NeuralEngine {
   }
 
   private drawLabels(order: GraphNode[], fset: Set<string> | null) {
-    const ctx = this.ctx, th = this.th;
+    const ctx = this.ctx, pal = this.pal;
     ctx.font = "9.5px Consolas,Menlo,monospace";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
@@ -834,9 +1066,9 @@ export class NeuralEngine {
 
       const r = n.r * n.sc, tx = n.sx + r + 8, ty = n.sy;
       const w = this.measure(n.label);
-      ctx.fillStyle = th.labelBg;
+      ctx.fillStyle = pal.rotuloFundo;
       ctx.fillRect(tx - 3, ty - 7, w + 6, 14);
-      ctx.fillStyle = (n === this.sel || n === this.hover || n.act) ? th.labelFg : th.pal[n.ci];
+      ctx.fillStyle = (n === this.sel || n === this.hover || n.act) ? pal.rotuloTexto : pal.comunidades[n.ci];
       ctx.fillText(n.label, tx, ty);
     }
   }

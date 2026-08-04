@@ -1,0 +1,5 @@
+# Permissões requeridas pelo git.
+filesystem:
+  - C:/Users/paulo.zimmermann/Documents/jarvis
+process: true
+network: []

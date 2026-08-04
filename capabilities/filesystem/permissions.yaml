@@ -1,0 +1,8 @@
+# Espelho de `permissions` do manifest.yaml — o kernel aplica o manifest,
+# este arquivo existe para ser lido (plan-scheme.md). Gerado por
+# packages.capabilities.render_permissions_yaml: divergência entre os dois
+# é erro no harness.
+network: []
+filesystem:
+- C:/Users/paulo.zimmermann/Documents/jarvis/data/workspace
+process: false

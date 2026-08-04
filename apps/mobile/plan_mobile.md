@@ -1,3 +1,24 @@
+> ## ⚠️ STATUS: VISÃO FUTURA (v3) — NÃO IMPLEMENTADA
+>
+> **Este documento não descreve o aplicativo que existe.** Ele é um plano de longo prazo (fase v3) mantido como referência de direção. Nada do RunAnywhere SDK, inferência local ou pipeline de voz on-device está implementado.
+>
+> **O app real hoje** (`apps/mobile/`) é um **cliente fino do servidor Jarvis**, em Expo / React Native:
+> - Autenticação Cloudflare Access via WebView (token em `expo-secure-store`).
+> - Chat por WebSocket contra a API; telas de Goals, Brain, History e Settings.
+> - Estado em `zustand`, HTTP em `axios`. **Toda** a inferência acontece no servidor.
+>
+> **Impedimento técnico:** o RunAnywhere SDK exige módulos nativos, ou seja, *dev build* / `expo prebuild`. Isso é **incompatível com o Expo Go**, que é o fluxo de desenvolvimento atual do app. Adotar este plano significa abandonar o Expo Go.
+>
+> ### Gap para o Gate 1 (aprovação mobile de SPECs de self-evolution)
+> O papel mais próximo e mais barato para o mobile é ser o comunicador push do Gate 1. Falta tudo:
+> - **Sem `expo-notifications`** — a dependência não está no `package.json`; não há push nem registro de token de device.
+> - **Sem tela de aprovação de SPEC** — nenhuma tela lista SPECs pendentes ou emite aprovar/rejeitar.
+> - **Sem endpoint no servidor** — a API não expõe rota para listar SPECs pendentes nem para registrar a decisão.
+>
+> Referência do estado real do projeto: `ESTADO_DO_PROJETO.md` (raiz).
+
+---
+
 # Módulo Mobile – Integração com RunAnywhere SDK
 
 ## Objetivo

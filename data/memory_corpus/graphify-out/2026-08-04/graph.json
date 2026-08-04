@@ -1,0 +1,285 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "comida_md_0.md",
+      "file_type": "document",
+      "source_file": "comida_md_0.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "comida_md_0",
+      "community": 0,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "comida_md_0.md"
+    },
+    {
+      "label": "Mem\u00f3ria: knowledge",
+      "file_type": "document",
+      "source_file": "comida_md_0.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "comida_md_0_mem\u00f3ria_knowledge",
+      "community": 0,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "memoria: knowledge"
+    },
+    {
+      "label": "Metadata",
+      "file_type": "document",
+      "source_file": "comida_md_0.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "comida_md_0_metadata",
+      "community": 0,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "metadata"
+    },
+    {
+      "label": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "file_type": "document",
+      "source_file": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_a90256c61f0b498f935e519fe752bff3",
+      "community": 2,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "msg_a90256c61f0b498f935e519fe752bff3.md"
+    },
+    {
+      "label": "Mem\u00f3ria: chat_history",
+      "file_type": "document",
+      "source_file": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_a90256c61f0b498f935e519fe752bff3_mem\u00f3ria_chat_history",
+      "community": 2,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "memoria: chat_history"
+    },
+    {
+      "label": "Metadata",
+      "file_type": "document",
+      "source_file": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "msg_a90256c61f0b498f935e519fe752bff3_metadata",
+      "community": 2,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "metadata"
+    },
+    {
+      "label": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "file_type": "document",
+      "source_file": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_e33c3dc3885c42fcbec153db9474ef7c",
+      "community": 3,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "msg_e33c3dc3885c42fcbec153db9474ef7c.md"
+    },
+    {
+      "label": "Mem\u00f3ria: chat_history",
+      "file_type": "document",
+      "source_file": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_e33c3dc3885c42fcbec153db9474ef7c_mem\u00f3ria_chat_history",
+      "community": 3,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "memoria: chat_history"
+    },
+    {
+      "label": "Metadata",
+      "file_type": "document",
+      "source_file": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "msg_e33c3dc3885c42fcbec153db9474ef7c_metadata",
+      "community": 3,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "metadata"
+    },
+    {
+      "label": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "file_type": "document",
+      "source_file": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_ea816ce82fe6461ba7f9a074caba4727",
+      "community": 4,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "msg_ea816ce82fe6461ba7f9a074caba4727.md"
+    },
+    {
+      "label": "Mem\u00f3ria: chat_history",
+      "file_type": "document",
+      "source_file": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "msg_ea816ce82fe6461ba7f9a074caba4727_mem\u00f3ria_chat_history",
+      "community": 4,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "memoria: chat_history"
+    },
+    {
+      "label": "Metadata",
+      "file_type": "document",
+      "source_file": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "msg_ea816ce82fe6461ba7f9a074caba4727_metadata",
+      "community": 4,
+      "community_name": "Mem\u00f3ria: chat_history",
+      "norm_label": "metadata"
+    },
+    {
+      "label": "preferencias_usuario_md_0.md",
+      "file_type": "document",
+      "source_file": "preferencias_usuario_md_0.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "preferencias_usuario_md_0",
+      "community": 1,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "preferencias_usuario_md_0.md"
+    },
+    {
+      "label": "Mem\u00f3ria: knowledge",
+      "file_type": "document",
+      "source_file": "preferencias_usuario_md_0.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "preferencias_usuario_md_0_mem\u00f3ria_knowledge",
+      "community": 1,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "memoria: knowledge"
+    },
+    {
+      "label": "Metadata",
+      "file_type": "document",
+      "source_file": "preferencias_usuario_md_0.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "preferencias_usuario_md_0_metadata",
+      "community": 1,
+      "community_name": "Mem\u00f3ria: knowledge",
+      "norm_label": "metadata"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "comida_md_0.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "comida_md_0",
+      "target": "comida_md_0_mem\u00f3ria_knowledge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "comida_md_0.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "comida_md_0_mem\u00f3ria_knowledge",
+      "target": "comida_md_0_metadata",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_a90256c61f0b498f935e519fe752bff3",
+      "target": "msg_a90256c61f0b498f935e519fe752bff3_mem\u00f3ria_chat_history",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_a90256c61f0b498f935e519fe752bff3.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_a90256c61f0b498f935e519fe752bff3_mem\u00f3ria_chat_history",
+      "target": "msg_a90256c61f0b498f935e519fe752bff3_metadata",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_e33c3dc3885c42fcbec153db9474ef7c",
+      "target": "msg_e33c3dc3885c42fcbec153db9474ef7c_mem\u00f3ria_chat_history",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_e33c3dc3885c42fcbec153db9474ef7c.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_e33c3dc3885c42fcbec153db9474ef7c_mem\u00f3ria_chat_history",
+      "target": "msg_e33c3dc3885c42fcbec153db9474ef7c_metadata",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_ea816ce82fe6461ba7f9a074caba4727",
+      "target": "msg_ea816ce82fe6461ba7f9a074caba4727_mem\u00f3ria_chat_history",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "msg_ea816ce82fe6461ba7f9a074caba4727.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "msg_ea816ce82fe6461ba7f9a074caba4727_mem\u00f3ria_chat_history",
+      "target": "msg_ea816ce82fe6461ba7f9a074caba4727_metadata",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "preferencias_usuario_md_0.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "preferencias_usuario_md_0",
+      "target": "preferencias_usuario_md_0_mem\u00f3ria_knowledge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "preferencias_usuario_md_0.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "preferencias_usuario_md_0_mem\u00f3ria_knowledge",
+      "target": "preferencias_usuario_md_0_metadata",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": []
+}

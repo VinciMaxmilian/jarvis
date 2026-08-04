@@ -33,6 +33,9 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # (`../..:/app`) não enterrar as dependências instaladas.
 RUN python -m venv /opt/venv
 
+# webrtcvad precisa de compilador C
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc g++ python3-dev && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Camada de dependência: só o manifesto. Editar código não invalida esta camada,
