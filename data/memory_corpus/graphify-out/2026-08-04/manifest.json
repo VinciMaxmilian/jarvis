@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "preferencias_usuario_md_0.md": {
-    "mtime": 1785853583.645007,
-    "ast_hash": "c67ea249cf8198e87328e711364cc218",
+    "mtime": 1785859485.165444,
+    "ast_hash": "97eebe19c88e3825f0202a2aca559803",
     "semantic_hash": ""
   },
   "msg_a90256c61f0b498f935e519fe752bff3.md": {
@@ -22,6 +22,51 @@
   "msg_ea816ce82fe6461ba7f9a074caba4727.md": {
     "mtime": 1785858081.1440225,
     "ast_hash": "c17ae2f03dd5821c3d5b0346f33bda47",
+    "semantic_hash": ""
+  },
+  "msg_3164a1daee72455b84fcbbdc6e85fe57.md": {
+    "mtime": 1785864001.3728666,
+    "ast_hash": "b3cfbf351ebe957bce116d03d045b004",
+    "semantic_hash": ""
+  },
+  "msg_53cc24e6c7ed40d296f5445a0357ec81.md": {
+    "mtime": 1785864616.288917,
+    "ast_hash": "458f5c9e1d1fce527e577be3dc7cad4e",
+    "semantic_hash": ""
+  },
+  "msg_576080620964472b934d509bed839be3.md": {
+    "mtime": 1785859175.2279193,
+    "ast_hash": "41c5fb3504b1b6a0fb1d4553d894520b",
+    "semantic_hash": ""
+  },
+  "msg_942fa4d67b36470aaf26ac4edf80ad04.md": {
+    "mtime": 1785860438.8156197,
+    "ast_hash": "b21b46cf349f031588bed0ae01cbe636",
+    "semantic_hash": ""
+  },
+  "msg_a820546b47b749bd82b4aed9997e3606.md": {
+    "mtime": 1785859693.2547352,
+    "ast_hash": "bee815425df782c002324a3588528c70",
+    "semantic_hash": ""
+  },
+  "msg_cfcfcb83deb04c8a9af8f45db48ffe80.md": {
+    "mtime": 1785859005.721889,
+    "ast_hash": "c6a4b4f3ecfee9b714767fe0dd5252a3",
+    "semantic_hash": ""
+  },
+  "msg_d7279c3ae9a043e7b206c639dac7fc6a.md": {
+    "mtime": 1785860496.7121627,
+    "ast_hash": "035eeddcaf4849633a875b1900e62516",
+    "semantic_hash": ""
+  },
+  "msg_e7c14dd4d17d4a7587c9a431d6cea828.md": {
+    "mtime": 1785864664.5186703,
+    "ast_hash": "824b7c588629ba362411616ae7159be5",
+    "semantic_hash": ""
+  },
+  "msg_f5ef283e1a6d4e6782758303227f7ac1.md": {
+    "mtime": 1785864019.2053032,
+    "ast_hash": "0b40d0e90f265c0db1f8a07135d20ce8",
     "semantic_hash": ""
   }
 }

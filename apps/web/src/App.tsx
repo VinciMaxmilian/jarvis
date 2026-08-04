@@ -2,6 +2,7 @@ import { useState, lazy, Suspense } from 'react'
 import Layout, { type PageId } from './components/Layout'
 import ChatPage from './pages/ChatPage'
 import { VoiceButton } from './components/VoiceButton'
+import ImageAnalysisModal from './components/ImageAnalysisModal'
 
 // Só o chat entra no bundle inicial. As demais páginas — e o mapa neural com
 // seus 1.5 MB de grafo — só são baixadas quando o usuário navega até elas.
@@ -39,6 +40,7 @@ export default function App() {
         {currentPage === 'rules' && <RulesPage />}
       </Suspense>
       <VoiceButton />
+      <ImageAnalysisModal />
     </Layout>
   )
 }

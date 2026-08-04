@@ -412,7 +412,13 @@ async def get_chief_ai(
     stmt = select(SystemSettingsRow).where(SystemSettingsRow.id == 1)
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
-    system_prompt = row.system_prompt if row and row.system_prompt else None
+    system_prompt = row.system_prompt if row and row.system_prompt else ""
+    
+    visual_instructions = """
+Você tem suporte total a HTML e CSS (inline styles). Use tags HTML livremente para criar respostas visualmente atrativas, tabelas ricas, botões falsos, emotes ou até animações CSS quando fizer sentido para enriquecer a experiência do usuário. 
+Se o usuário ajustar os filtros de uma imagem no frontend e pedir para salvá-la, use a tool `save_modified_image`.
+"""
+    system_prompt += visual_instructions
 
     # Provider dedicado para embeddings: sempre Gemini (tem API de embedding
     # gratuita e confiável). O provider de chat (ex: LM Studio com qwen/gemma)

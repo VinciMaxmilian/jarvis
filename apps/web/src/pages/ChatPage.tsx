@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { getApiBase } from '../config'
 import Markdown from '../components/Markdown'
+import { useImageStore } from '../stores/useImageStore'
+import { Paperclip, X } from 'lucide-react'
 
 interface ChatMessage {
   id: string
@@ -11,11 +13,12 @@ interface ChatMessage {
 }
 
 interface WsChunk {
-  type: 'text' | 'tool_call' | 'done' | 'error'
+  type: 'text' | 'tool_call' | 'done' | 'error' | 'image_analysis_started'
   text?: string
   tool_call?: { name: string; arguments: Record<string, unknown> }
   error?: string
   conversation_id?: string
+  image_url?: string
 }
 
 /** Escreve o texto recebido na bolha certa — e, se não houver, cria uma.
@@ -188,6 +191,8 @@ function useChat(initialConversationId?: string) {
           setMessages(prev =>
             aplicarTexto(prev, currentText, currentId)
           );
+        } else if (chunk.type === 'image_analysis_started' && chunk.image_url) {
+          useImageStore.getState().openModal(chunk.image_url);
         } else if (chunk.type === 'done') {
           // Fecha TUDO que estiver em streaming, não só o id conhecido: bolha
           // que ficasse aberta mostraria os três pontinhos para sempre.
@@ -229,7 +234,7 @@ function useChat(initialConversationId?: string) {
     };
   }, []);
 
-  const send = useCallback((text: string) => {
+  const send = useCallback((text: string, images?: string[], files?: {name: string, content: string}[]) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
     setMessages(prev => [
@@ -250,7 +255,12 @@ function useChat(initialConversationId?: string) {
     ])
     setIsStreaming(true)
 
-    wsRef.current.send(JSON.stringify({ message: text, conversation_id: conversationId }))
+    wsRef.current.send(JSON.stringify({ 
+      message: text, 
+      conversation_id: conversationId,
+      images: images || [],
+      files: files || []
+    }))
   }, [conversationId])
 
   return { messages, send, isConnected, isStreaming, activeNodes }
@@ -279,6 +289,18 @@ export default function ChatPage({ conversationId, onNewChat }: { conversationId
       else window.clearTimeout(id as number)
     }
   }, [])
+
+  useEffect(() => {
+    const handleSaveImage = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const filters = customEvent.detail?.filters;
+      if (filters) {
+        send(`Please save the currently analyzed image with these filters applied: brightness ${filters.brightness}%, contrast ${filters.contrast}%, saturation ${filters.saturation}%. Use the save_modified_image tool.`);
+      }
+    };
+    window.addEventListener('jarvis:save_image', handleSaveImage);
+    return () => window.removeEventListener('jarvis:save_image', handleSaveImage);
+  }, [send])
 
   return (
     <div style={{
@@ -440,17 +462,77 @@ export default function ChatPage({ conversationId, onNewChat }: { conversationId
   )
 }
 
-function ChatInput({ isConnected, isStreaming, onSend }: { isConnected: boolean, isStreaming: boolean, onSend: (text: string) => void }) {
+interface Attachment {
+  file: File;
+  name: string;
+  type: string;
+  content: string;
+}
+
+function ChatInput({ isConnected, isStreaming, onSend }: { isConnected: boolean, isStreaming: boolean, onSend: (text: string, images?: string[], files?: {name: string, content: string}[]) => void }) {
   const [input, setInput] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const newAttachments: Attachment[] = [];
+    for (const file of Array.from(e.target.files)) {
+      if (file.size > 5 * 1024 * 1024) {
+         alert(`Arquivo ${file.name} muito grande (max 5MB)`);
+         continue;
+      }
+      
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        if (file.type.startsWith('image/')) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+      
+      newAttachments.push({
+        file,
+        name: file.name,
+        type: file.type,
+        content
+      });
+    }
+    setAttachments(prev => [...prev, ...newAttachments]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isStreaming) return
-    onSend(input.trim())
+    if ((!input.trim() && attachments.length === 0) || isStreaming) return
+    
+    const images = attachments.filter(a => a.type.startsWith('image/')).map(a => a.content);
+    const files = attachments.filter(a => !a.type.startsWith('image/')).map(a => ({ name: a.name, content: a.content }));
+    
+    onSend(input.trim(), images, files)
     setInput('')
+    setAttachments([])
   }
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, padding: '8px 20px', background: 'var(--neu-bg)', flexWrap: 'wrap' }}>
+          {attachments.map((att, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--neu-surface)', padding: '4px 10px', borderRadius: 4, fontSize: '0.8rem', border: '1px solid var(--color-accent-300)' }}>
+               <span>{att.name}</span>
+               <X size={14} style={{ cursor: 'pointer' }} onClick={() => removeAttachment(i)} />
+            </div>
+          ))}
+        </div>
+      )}
       <form
         onSubmit={handleSubmit}
         style={{
@@ -461,6 +543,22 @@ function ChatInput({ isConnected, isStreaming, onSend }: { isConnected: boolean,
           gap: 10,
         }}
       >
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text)' }}
+          disabled={!isConnected || isStreaming}
+        >
+          <Paperclip size={20} />
+        </button>
+        <input 
+          type="file" 
+          multiple 
+          ref={fileInputRef} 
+          style={{ display: 'none' }} 
+          onChange={handleFileChange}
+          accept="image/*,text/*,.csv,.json,.md"
+        />
         <input
           className="neu-input"
           type="text"
@@ -473,11 +571,11 @@ function ChatInput({ isConnected, isStreaming, onSend }: { isConnected: boolean,
         <button
           className="neu-btn neu-btn-primary"
           type="submit"
-          disabled={!isConnected || isStreaming || !input.trim()}
-          style={{ textTransform: 'uppercase' }}
+          disabled={!isConnected || isStreaming}
         >
-          SEND
+          Send
         </button>
       </form>
+    </div>
   )
 }

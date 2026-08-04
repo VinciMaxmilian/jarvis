@@ -78,26 +78,29 @@ class ChiefAI:
         return self._profile
 
     async def _completar(
-        self, messages: list[Message], tools: list[ToolSpec] | None
+        self, messages: list[Message], tools: list[ToolSpec] | None, images: list[str] | None = None
     ) -> Completion:
         """Chama o LLM com a temperatura do perfil.
-
-        Os dois ramos existem porque `temperature=None` no perfil significa "não
-        mande o parâmetro", e não "mande `None`": o default do provider é uma
-        decisão dele, e o `CHIEF_PROFILE` a preserva. Passar `0.7` escrito aqui
-        pareceria igual e congelaria um valor que hoje é do provider.
+        
+        Usa complete_with_images se houver imagens e o provider suportar.
         """
-        if self._profile.temperature is None:
-            return await self._llm.complete(messages=messages, tools=tools)
-        return await self._llm.complete(
-            messages=messages, tools=tools, temperature=self._profile.temperature
-        )
+        temp = self._profile.temperature
+        kwargs = {"messages": messages, "tools": tools}
+        if temp is not None:
+            kwargs["temperature"] = temp
+            
+        if images and hasattr(self._llm, "complete_with_images"):
+            kwargs["images"] = images
+            return await self._llm.complete_with_images(**kwargs)
+            
+        return await self._llm.complete(**kwargs)
 
     async def respond(
         self,
         user_text: str,
         conversation_id: UUID,
         current_user_email: str = "Usuário Local",
+        images: list[str] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Processa mensagem do usuário. Yield StreamChunks para streaming."""
 
@@ -208,9 +211,11 @@ class ChiefAI:
 
         for _round in range(max_tool_rounds):
             # LLM call (non-streaming para tool loop)
+            # Imagens são enviadas no primeiro turno, depois limpamos para não enviar de novo repetidamente
             completion = await self._completar(
                 messages=messages,
                 tools=tool_specs if tool_specs else None,
+                images=images if _round == 0 else None
             )
 
             logger.info(

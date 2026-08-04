@@ -1,17 +1,38 @@
 # Graph Report - memory_corpus  (2026-08-04)
 
 ## Corpus Check
-- 14 files · ~344 words
+- 35 files · ~814 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 42 nodes · 28 edges · 14 communities (0 shown, 14 thin omitted)
+- 105 nodes · 70 edges · 35 communities (0 shown, 35 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
 - Memória: knowledge
 - Memória: knowledge
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
 - Memória: chat_history
 - Memória: chat_history
 - Memória: chat_history
@@ -40,15 +61,15 @@
 ## Surprising Connections (you probably didn't know these)
 - None detected - all connections are within the same source files.
 
-## Communities (14 total, 14 thin omitted)
+## Communities (35 total, 35 thin omitted)
 
 ## Knowledge Gaps
-- **14 isolated node(s):** `Metadata`, `Metadata`, `Metadata`, `Metadata`, `Metadata` (+9 more)
+- **35 isolated node(s):** `Metadata`, `Metadata`, `Metadata`, `Metadata`, `Metadata` (+30 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **35 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What connects `Metadata`, `Metadata`, `Metadata` to the rest of the system?**
-  _14 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _35 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -84,6 +84,14 @@ async def chat_ws(websocket: WebSocket) -> None:
             conv_id = (
                 UUID(data["conversation_id"]) if data.get("conversation_id") else uuid4()
             )
+            images = data.get("images")
+            files = data.get("files")
+            
+            if files:
+                user_msg += "\n\n"
+                for file_obj in files:
+                    user_msg += f"=== Conteúdo do arquivo anexado: {file_obj.get('name', 'arquivo')} ===\n"
+                    user_msg += f"{file_obj.get('content', '')}\n"
 
             # Nova session por mensagem. `get_db` é dependência do FastAPI e não
             # serve aqui: puxar dela com `anext()` abria um async generator que
@@ -93,7 +101,7 @@ async def chat_ws(websocket: WebSocket) -> None:
                 try:
                     chief = await get_chief_ai(session)
                     store = PgConversationStore(session)
-                    await store.ensure_conversation(conv_id, title=user_msg)
+                    await store.ensure_conversation(conv_id, title=data.get("message", "Nova Conversa"))
 
                     email = websocket.scope.get("cf_access_claims", {}).get("email", "Usuário Local")
                     
@@ -110,11 +118,16 @@ async def chat_ws(websocket: WebSocket) -> None:
                                 source=email
                             )
                         )
-                    async for chunk in chief.respond(user_msg, conv_id, current_user_email=email):
+                    async for chunk in chief.respond(user_msg, conv_id, current_user_email=email, images=images):
                         payload: dict = {"type": chunk.type}
                         if chunk.type == "text":
                             payload["text"] = chunk.text
                         elif chunk.type == "tool_call" and chunk.tool_call:
+                            if chunk.tool_call.name == "analyze_image":
+                                img_url = chunk.tool_call.arguments.get("image_url")
+                                if img_url:
+                                    await websocket.send_text(json.dumps({"type": "image_analysis_started", "image_url": img_url}, default=str))
+                                    
                             payload["tool_call"] = {
                                 "name": chunk.tool_call.name,
                                 "arguments": chunk.tool_call.arguments,

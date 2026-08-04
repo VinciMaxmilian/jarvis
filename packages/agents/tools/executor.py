@@ -137,6 +137,37 @@ KNOWLEDGE_FORGET_SPEC = ToolSpec(
     requires_approval=False,
 )
 
+ANALYZE_IMAGE_SPEC = ToolSpec(
+    name="analyze_image",
+    description="Analisa o conteúdo visual de uma imagem a partir de uma URL ou caminho de arquivo local.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "image_url": {"type": "string", "description": "A URL ou caminho local da imagem."}
+        },
+        "required": ["image_url"],
+    },
+    idempotent=True,
+    requires_approval=False,
+)
+
+SAVE_MODIFIED_IMAGE_SPEC = ToolSpec(
+    name="save_modified_image",
+    description="Aplica filtros (brilho, contraste, saturação) em uma imagem e a salva no backend.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "image_url": {"type": "string", "description": "A URL original da imagem."},
+            "brightness": {"type": "number", "description": "Valor de brilho (porcentagem)."},
+            "contrast": {"type": "number", "description": "Valor de contraste (porcentagem)."},
+            "saturation": {"type": "number", "description": "Valor de saturação (porcentagem)."}
+        },
+        "required": ["image_url", "brightness", "contrast", "saturation"]
+    },
+    idempotent=False,
+    requires_approval=False,
+)
+
 def _as_int(value: object, *, default: int) -> int:
     if isinstance(value, bool):
         return default
@@ -177,6 +208,8 @@ class SystemToolExecutor:
             CRIAR_SERVIDOR_MCP_SPEC.name: CRIAR_SERVIDOR_MCP_SPEC,
             KNOWLEDGE_SAVE_SPEC.name: KNOWLEDGE_SAVE_SPEC,
             KNOWLEDGE_FORGET_SPEC.name: KNOWLEDGE_FORGET_SPEC,
+            ANALYZE_IMAGE_SPEC.name: ANALYZE_IMAGE_SPEC,
+            SAVE_MODIFIED_IMAGE_SPEC.name: SAVE_MODIFIED_IMAGE_SPEC,
         }
 
     async def get_all_specs(self) -> list[ToolSpec]:
@@ -236,6 +269,21 @@ class SystemToolExecutor:
             if name == "knowledge_forget":
                 return await self._knowledge_forget(
                     doc_id=str(arguments.get("doc_id", "")),
+                    dry_run=dry_run
+                )
+                
+            if name == "analyze_image":
+                return await self._analyze_image(
+                    image_url=str(arguments.get("image_url", "")),
+                    dry_run=dry_run
+                )
+                
+            if name == "save_modified_image":
+                return await self._save_modified_image(
+                    image_url=str(arguments.get("image_url", "")),
+                    brightness=float(arguments.get("brightness", 100)),
+                    contrast=float(arguments.get("contrast", 100)),
+                    saturation=float(arguments.get("saturation", 100)),
                     dry_run=dry_run
                 )
                 
@@ -515,4 +563,63 @@ class SystemToolExecutor:
         except Exception as exc:
             return {"error": str(exc)}
 
-__all__ = ["SystemToolExecutor", "TAVILY_SEARCH_SPEC", "SEARCH_MEMORY_SPEC", "CRIAR_SERVIDOR_MCP_SPEC", "KNOWLEDGE_SAVE_SPEC", "KNOWLEDGE_FORGET_SPEC"]
+    async def _analyze_image(
+        self, image_url: str, dry_run: bool = False
+    ) -> dict[str, object]:
+        if dry_run:
+            return {"dry_run": True, "action": "analyze_image", "image_url": image_url}
+        # Apenas dizemos que a imagem foi recebida com sucesso.
+        # A interface de websocket capturará a chamada da ferramenta para abrir o modal
+        return {"sucesso": True, "mensagem": f"Iniciada a análise da imagem {image_url}. A interface foi notificada."}
+
+    async def _save_modified_image(
+        self, image_url: str, brightness: float, contrast: float, saturation: float, dry_run: bool = False
+    ) -> dict[str, object]:
+        if dry_run:
+            return {"dry_run": True, "action": "save_modified_image", "image_url": image_url}
+            
+        try:
+            import urllib.request
+            from io import BytesIO
+            from PIL import Image, ImageEnhance
+            import os
+            import uuid
+            
+            # Processa URL ou Base64
+            if image_url.startswith("http"):
+                req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    img_data = response.read()
+            else:
+                if image_url.startswith("data:"):
+                    image_url = image_url.split(",")[1]
+                import base64
+                img_data = base64.b64decode(image_url)
+                
+            img = Image.open(BytesIO(img_data)).convert('RGBA')
+            
+            # Aplica filtros
+            if brightness != 100:
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(brightness / 100.0)
+                
+            if contrast != 100:
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(contrast / 100.0)
+                
+            if saturation != 100:
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(saturation / 100.0)
+                
+            save_dir = os.path.join(os.getcwd(), "data", "images")
+            os.makedirs(save_dir, exist_ok=True)
+            filename = f"mod_{uuid.uuid4().hex[:8]}.png"
+            filepath = os.path.join(save_dir, filename)
+            
+            img.save(filepath, format="PNG")
+            
+            return {"sucesso": True, "caminho": filepath, "mensagem": f"Imagem salva em {filepath}"}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+__all__ = ["SystemToolExecutor", "TAVILY_SEARCH_SPEC", "SEARCH_MEMORY_SPEC", "CRIAR_SERVIDOR_MCP_SPEC", "KNOWLEDGE_SAVE_SPEC", "KNOWLEDGE_FORGET_SPEC", "ANALYZE_IMAGE_SPEC", "SAVE_MODIFIED_IMAGE_SPEC"]
