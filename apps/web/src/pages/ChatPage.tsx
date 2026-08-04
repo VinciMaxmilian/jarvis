@@ -237,9 +237,17 @@ function useChat(initialConversationId?: string) {
   const send = useCallback((text: string, images?: string[], files?: {name: string, content: string}[]) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
+    let displayContent = text;
+    if (images && images.length > 0) {
+      displayContent += '\n\n' + images.map((img, i) => `![Anexo ${i+1}](${img})`).join('\n');
+    }
+    if (files && files.length > 0) {
+      displayContent += '\n\n' + files.map(f => `📄 **Anexo:** ${f.name}`).join('\n');
+    }
+
     setMessages(prev => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date() },
+      { id: crypto.randomUUID(), role: 'user', content: displayContent, timestamp: new Date() },
     ])
 
     streamBufferRef.current = ''

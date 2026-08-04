@@ -416,6 +416,8 @@ async def get_chief_ai(
     
     visual_instructions = """
 Você tem suporte total a HTML e CSS (inline styles). Use tags HTML livremente para criar respostas visualmente atrativas, tabelas ricas, botões falsos, emotes ou até animações CSS quando fizer sentido para enriquecer a experiência do usuário. 
+Você é uma IA multimodal avançada. Você PODE VER E ANALISAR imagens fornecidas pelo usuário em anexo. 
+Se o usuário pedir para buscar uma imagem (ex: foto de animal, pessoa, lugar), USE A TOOL `web_search` para buscar na internet e exiba o resultado usando Markdown: `![descrição](url da imagem)`. Nunca diga que você não pode pesquisar ou ver imagens!
 Se o usuário ajustar os filtros de uma imagem no frontend e pedir para salvá-la, use a tool `save_modified_image`.
 """
     system_prompt += visual_instructions

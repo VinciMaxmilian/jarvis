@@ -202,20 +202,102 @@ class OpenAIProvider:
                         pass
 
             return Completion(
+                model=self._model,
                 text=text,
                 tool_calls=tool_calls,
                 input_tokens=usage.prompt_tokens if usage else 0,
                 output_tokens=usage.completion_tokens if usage else 0,
-                model=response.model or self._model,
-                finish_reason=choice.finish_reason or "",
             )
-
+        except openai.APIStatusError as exc:
+            raise ProviderRequestError(str(exc), status_code=exc.status_code) from exc
         except openai.APIError as exc:
-            raise ProviderRequestError(
-                str(exc), status_code=getattr(exc, "status_code", None)
-            ) from exc
-        except Exception as exc:
-            raise LLMError(f"Unexpected error: {exc}") from exc
+            raise ProviderRequestError(str(exc), status_code=500) from exc
+
+    async def complete_with_images(
+        self,
+        messages: list[Message],
+        images: list[str],
+        tools: list[ToolSpec] | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        system: str | None = None,
+    ) -> Completion:
+        """Gera completion com suporte a imagens."""
+        try:
+            oai_msgs = self._convert_messages(messages, system=system)
+            
+            if images:
+                for msg in reversed(oai_msgs):
+                    if msg["role"] == "user":
+                        text_content = msg["content"]
+                        content_list = [{"type": "text", "text": text_content}]
+                        for img in images:
+                            if not img.startswith("data:image") and not img.startswith("http"):
+                                img_url = f"data:image/jpeg;base64,{img}"
+                            else:
+                                img_url = img
+                            content_list.append({
+                                "type": "image_url",
+                                "image_url": {"url": img_url}
+                            })
+                        msg["content"] = content_list
+                        break
+
+            oai_tools = self._convert_tools(tools)
+
+            kwargs: dict[str, Any] = {
+                "model": self._model,
+                "messages": oai_msgs,
+                "temperature": temperature,
+                "max_tokens": max_tokens or 4096,
+            }
+            if oai_tools:
+                kwargs["tools"] = oai_tools
+
+            response = await self._client.chat.completions.create(**kwargs)
+            choice = response.choices[0]
+            usage = response.usage
+
+            text = choice.message.content or ""
+            tool_calls = self._parse_tool_calls(choice.message.tool_calls)
+
+            if not tool_calls and text:
+                import re
+                import uuid
+                match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+                json_str = match.group(1) if match else text.strip()
+                
+                if json_str.startswith("{") and '"name"' in json_str:
+                    try:
+                        parsed = json.loads(json_str)
+                        if "name" in parsed and ("arguments" in parsed or "parameters" in parsed):
+                            args = parsed.get("arguments", parsed.get("parameters", {}))
+                            if isinstance(args, str):
+                                try:
+                                    args = json.loads(args)
+                                except json.JSONDecodeError:
+                                    pass
+                            if isinstance(args, dict):
+                                tool_calls.append(ToolCall(
+                                    id=f"call_{uuid.uuid4().hex[:8]}", 
+                                    name=parsed["name"], 
+                                    arguments=args
+                                ))
+                                text = ""
+                    except json.JSONDecodeError:
+                        pass
+
+            return Completion(
+                model=self._model,
+                text=text,
+                tool_calls=tool_calls,
+                input_tokens=usage.prompt_tokens if usage else 0,
+                output_tokens=usage.completion_tokens if usage else 0,
+            )
+        except openai.APIStatusError as exc:
+            raise ProviderRequestError(str(exc), status_code=exc.status_code) from exc
+        except openai.APIError as exc:
+            raise ProviderRequestError(str(exc), status_code=500) from exc
 
     async def stream(
         self,

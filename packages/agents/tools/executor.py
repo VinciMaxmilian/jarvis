@@ -313,6 +313,7 @@ class SystemToolExecutor:
                     "query": query,
                     "max_results": min(max_results, 10),
                     "include_answer": True,
+                    "include_images": True,
                     "include_raw_content": False,
                 },
             )
@@ -330,6 +331,7 @@ class SystemToolExecutor:
 
         return {
             "answer": data.get("answer", ""),
+            "images": data.get("images", []),
             "results": results,
             "query": query,
         }
