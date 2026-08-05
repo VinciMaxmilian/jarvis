@@ -72,7 +72,18 @@ class MCPClientManager:
                 server_name = child.name
                 if server_name in self.servers:
                     continue
-                    
+
+                # Marcador `HOST_ONLY`: o servidor só faz sentido no Windows do
+                # dono, não aqui dentro. Subir `jarvis_windows_host` como stdio
+                # no container daria uma de duas coisas ruins — falha de import
+                # engolida pelo `except` abaixo (ruído), ou, pior, se as libs
+                # existissem na imagem, um servidor conectado que fotografa uma
+                # tela que não existe e rouba a rota das tools do host real.
+                if (child / "HOST_ONLY").exists():
+                    logger.debug("mcp.server.host_only.skipped", server=server_name)
+                    continue
+
+
                 params = StdioServerParameters(
                     command=sys.executable,
                     args=[str(child / "main.py")],
@@ -110,9 +121,18 @@ class MCPClientManager:
                     self.tool_routes[tool.name] = host_server_name
                     
                 logger.info("mcp.server.registered", server=host_server_name, tools=len(tools_result.tools))
-            except Exception:
-                # O servidor pode não estar rodando no Windows, ignoramos silenciosamente
-                pass
+            except Exception as exc:
+                # O servidor pode não estar rodando no Windows. Não derruba nada,
+                # mas TAMBÉM não some: quando o dono pedir "clica ali" e o Jarvis
+                # responder que não tem como, a causa é esta linha. Silêncio total
+                # aqui transformava "esqueci de subir o host" em "o agente é burro".
+                logger.warning(
+                    "mcp.host.indisponivel",
+                    server=host_server_name,
+                    url=sse_url,
+                    error=str(exc),
+                    dica="suba o MCP do host: scripts/run_desktop_host.ps1",
+                )
 
     async def get_tools_specs(self) -> list[dict[str, Any]]:
         """Devolve as especificações das ferramentas prontas para o LLM.
@@ -161,16 +181,31 @@ class MCPClientManager:
             raise RuntimeError(f"Servidor MCP '{server_name}' desconectado.")
             
         result = await instance.session.call_tool(name, arguments=arguments)
-        
-        # O resultado do MCP tem isError e content (lista de text/image)
+
+        # O resultado do MCP tem isError e content (lista de text/image).
+        #
+        # O bloco `image` era DESCARTADO em silêncio aqui. Uma tool que fotografa
+        # a tela (`desktop_capturar_tela`) chegava ao modelo como um resultado
+        # vazio, e ele respondia sobre a captura que nunca viu. Hoje o base64 sai
+        # em `images`, separado do texto de propósito: quem consome (o laço do
+        # `ChiefAI`) manda imagem pelo canal multimodal do provider, não
+        # empacotada num JSON de tool result — 1 MB de base64 dentro do texto
+        # estouraria o contexto e o modelo não a interpretaria como imagem.
         output = ""
+        images: list[str] = []
         for item in result.content:
             if item.type == "text":
                 output += item.text + "\n"
-                
+            elif item.type == "image":
+                images.append(item.data)
+
         if result.isError:
             return {"error": output.strip()}
-        return {"result": output.strip()}
+
+        payload: dict[str, Any] = {"result": output.strip()}
+        if images:
+            payload["images"] = images
+        return payload
 
     async def close_all(self) -> None:
         for instance in self.servers.values():

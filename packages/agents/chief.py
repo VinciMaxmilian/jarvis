@@ -42,6 +42,20 @@ logger = structlog.get_logger(__name__)
 #: uma mudança acidental no prompt não quebra nada e só piora as respostas.
 SYSTEM_PROMPT = load_prompt(CHIEF_PROFILE)
 
+#: Rodadas de tool por turno no caminho normal.
+_RODADAS_PADRAO = 5
+
+#: Teto quando o turno usa `desktop_*`. Pilotar interface é uma sequência de
+#: passos curtos (abrir → inspecionar → clicar → conferir → corrigir) e cinco
+#: rodadas acabam antes da tarefa. Não é `_RODADAS_PADRAO` maior para todo mundo
+#: porque cada rodada é uma chamada de LLM paga.
+_RODADAS_DESKTOP = 15
+
+#: Imagens enviadas ao modelo por rodada. Duas: a última captura e a anterior,
+#: que é o que permite ao modelo comparar "antes" e "depois" da própria ação.
+#: Sem teto, um turno de 15 rodadas mandaria 15 PNGs de tela cheia.
+_TETO_IMAGENS = 2
+
 
 class ChiefAI:
     """Chief AI v0: LLM loop com tool calling, sob um perfil de agente."""
@@ -265,11 +279,23 @@ class ChiefAI:
                 "agent.catalogo_lento", segundos=round(_dt_specs, 2), tools=len(tool_specs)
             )
 
-        max_tool_rounds = 5
+        # O orçamento de rodadas é adaptativo. Cinco basta para "busca e
+        # responde", e é pouco para pilotar uma interface: abrir a tela certa,
+        # inspecionar, clicar, conferir a captura e corrigir já são cinco. Subir
+        # o teto para todo mundo pagaria essa conta em toda conversa, então ele
+        # sobe só quando o turno de fato encosta numa tool `desktop_*`.
+        limite_rodadas = _RODADAS_PADRAO
 
-        for _round in range(max_tool_rounds):
+        # Imagens vivas neste turno. Começa com o que o dono anexou e passa a
+        # receber as capturas devolvidas pelas tools (ver o bloco de execução
+        # abaixo). `_TETO_IMAGENS` é o que impede o laço de virar um upload de
+        # 15 PNGs de tela cheia para o modelo.
+        capturas: list[str] = []
+
+        _round = -1
+        while (_round := _round + 1) < limite_rodadas:
+            images_da_rodada = [*(images or []), *capturas][-_TETO_IMAGENS:] or None
             # LLM call (non-streaming para tool loop)
-            # Imagens são enviadas no primeiro turno, depois limpamos para não enviar de novo repetidamente
             # A imagem acompanha TODAS as rodadas deste turno, não só a primeira.
             #
             # Com `_round == 0`, o agente ficava CEGO assim que chamasse qualquer
@@ -281,12 +307,12 @@ class ChiefAI:
             # é o pior formato possível para esse defeito.
             #
             # Custa reenviar a imagem por rodada? Custa. Mas o laço é limitado a
-            # `max_tool_rounds`, é o MESMO turno do dono, e a alternativa é um
+            # `limite_rodadas`, é o MESMO turno do dono, e a alternativa é um
             # agente multimodal que perde a visão no meio da própria resposta.
             completion = await self._completar(
                 messages=messages,
                 tools=tool_specs if tool_specs else None,
-                images=images,
+                images=images_da_rodada,
             )
 
             logger.info(
@@ -370,8 +396,24 @@ class ChiefAI:
                 # justamente cobrir a espera. Depois da execução ele não teria
                 # nada a esconder.
                 yield StreamChunk(type="tool_call", tool_call=tc)
+                if tc.name.startswith("desktop_"):
+                    limite_rodadas = max(limite_rodadas, _RODADAS_DESKTOP)
+
                 try:
                     result = await self._tools.execute(tc.name, tc.arguments)
+                    # Captura devolvida pela tool sai do JSON e entra no canal
+                    # multimodal da PRÓXIMA rodada. Deixá-la no texto seria pior
+                    # de duas formas: o modelo receberia base64 como se fosse
+                    # prosa, e um único screenshot (~200 KB em base64) empurraria
+                    # o histórico inteiro para fora da janela de contexto.
+                    novas = result.pop("images", None) if isinstance(result, dict) else None
+                    if isinstance(novas, list) and novas:
+                        capturas.extend(str(i) for i in novas)
+                        del capturas[:-_TETO_IMAGENS]
+                        result["images"] = (
+                            f"{len(novas)} captura(s) anexada(s) como imagem nesta "
+                            "conversa — olhe a imagem, ela é o estado atual da tela."
+                        )
                     result_str = json.dumps(result, ensure_ascii=False, default=str)
                 except ToolDenied as exc:
                     # Recusa volta como resultado da tool, não como exceção que

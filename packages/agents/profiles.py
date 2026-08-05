@@ -138,8 +138,49 @@ class AgentProfile(BaseModel):
 # `criar_servidor_mcp` escreve arquivo no repo e recarrega o processo — é a única
 # tool de ação nativa hoje, e por isso é ela que separa o executor dos outros.
 
-_LEITURA: Final = frozenset({"web_search", "search_memory"})
-_ACAO: Final = frozenset({"criar_servidor_mcp", "knowledge_save", "knowledge_forget"})
+#
+# As tools `desktop_*` (`mcp/jarvis_windows_host/`) entram nas duas listas, e a
+# divisão entre elas não é estética: olhar a tela é reversível e barato, mover o
+# mouse do dono não é. Um `reviewer` que precise conferir "ficou mesmo no modo
+# escuro?" tem de poder tirar um screenshot; nenhum papel além do executor pode
+# clicar. Sem esta separação, `allow_unlisted=False` desses papéis os deixaria
+# cegos, e `True` lhes daria o teclado.
+
+_DESKTOP_PERCEPCAO: Final = frozenset({
+    "desktop_status",
+    "desktop_capturar_tela",
+    "desktop_inspecionar",
+    "desktop_listar_janelas",
+    "desktop_posicao_cursor",
+    "desktop_listar_bloqueios",
+})
+
+#: Tudo que mexe na máquina do dono — mais `desktop_liberar_controle`, que é a
+#: chave da porta, e `desktop_desbloquear_janela`, que remove proteção.
+_DESKTOP_ACAO: Final = frozenset({
+    "desktop_liberar_controle",
+    "desktop_encerrar_controle",
+    "desktop_abrir",
+    "desktop_focar_janela",
+    "desktop_clicar",
+    "desktop_clicar_elemento",
+    "desktop_preencher_campo",
+    "desktop_digitar",
+    "desktop_teclas",
+    "desktop_rolar",
+    "desktop_arrastar",
+    "desktop_desbloquear_janela",
+})
+
+#: `desktop_bloquear_janela` é leitura-para-todos de propósito, apesar de
+#: escrever em disco: ela só APERTA a segurança. Qualquer papel que ouça o dono
+#: dizer "nunca mexa no meu banco" deve poder registrar isso na hora.
+_LEITURA: Final = frozenset({
+    "web_search", "search_memory", "desktop_bloquear_janela", *_DESKTOP_PERCEPCAO
+})
+_ACAO: Final = frozenset({
+    "criar_servidor_mcp", "knowledge_save", "knowledge_forget", *_DESKTOP_ACAO
+})
 
 
 #: O papel histórico, preservado byte a byte.

@@ -1,0 +1,15 @@
+# Scripts do Windows PowerShell precisam de CRLF no disco.
+#
+# O Windows PowerShell 5.1 le .ps1 sem BOM como ANSI (Windows-1252), e nao como
+# UTF-8. Um travessao gravado em UTF-8 chega ao parser como uma aspa, e a partir
+# dali as strings do script fecham no lugar errado e as variaveis somem — o
+# sintoma nao e texto feio, e o script inteiro sendo mal interpretado.
+#
+# Por isso scripts/run_desktop_host.ps1 e gravado em UTF-8 COM BOM. O BOM e
+# conteudo e o git o preserva sozinho; esta regra cuida da outra metade, fixando
+# a quebra de linha para que um clone com core.autocrlf=false (ou em outro SO)
+# nao deixe o arquivo em LF.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf

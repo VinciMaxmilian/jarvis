@@ -1,0 +1,8 @@
+Este servidor MCP só roda no Windows do dono, nunca dentro do container.
+
+`packages/mcp/client_manager.py::discover_and_connect` procura este arquivo e
+pula a pasta. Sem ele, a API tentaria subir uma cópia stdio deste servidor
+dentro do Docker — que não tem tela, mouse nem teclado — e essa cópia roubaria a
+rota das tools `desktop_*` do host real.
+
+Como subir, no Windows:  scripts/run_desktop_host.ps1

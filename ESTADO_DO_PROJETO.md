@@ -33,6 +33,27 @@ Este é o pipeline que **efetivamente roda**, não um plano descartado:
 - **Frontend Web:** `apps/web/src/hooks/useVoiceCall.ts` para a chamada de voz e `apps/web/src/hooks/useWakeWord.ts` (Porcupine) para a wake word.
 - A arquitetura A2A com a Gemini Live API é **meta futura** (ver seção 2), não substituição já feita.
 
+### 🖱️ Computer Use — ver a tela, clicar e digitar (desde 2026-08-05)
+Fallback para quando nenhuma capability, MCP ou comando resolve o pedido. Ver
+`plano_computer_use.md` para o desenho completo e o que ficou pendente.
+- **Servidor MCP no host Windows:** `mcp/jarvis_windows_host/` (19 tools
+  `desktop_*`), carregado pelo `mcp/main.py` e servido em `127.0.0.1:8765` — a
+  porta que `packages/mcp/client_manager.py` já procurava. Sobe com
+  `scripts/run_desktop_host.ps1`; o marcador `HOST_ONLY` impede o container de
+  subir uma cópia cega dele.
+- **UIA antes de pixel:** `desktop_inspecionar` lê a árvore de acessibilidade e
+  devolve cada controle com um `id`; `desktop_clicar_elemento` clica por `id`.
+  Screenshot com caixas numeradas (Set-of-Mark) é o fallback.
+- **Encanamento que faltava:** `call_tool` descartava blocos de imagem do MCP em
+  silêncio, e o laço do `ChiefAI` não injetava captura de tool result na rodada
+  seguinte — os dois corrigidos, com o teto de 2 imagens por rodada.
+- **Travas:** interruptor mestre `DESKTOP_CONTROL_ENABLED` (desligado por
+  padrão, só o dono liga), sessão com prazo, failsafe do canto da tela, denylist
+  persistente que o dono amplia conversando, recusa em campo de senha,
+  confirmação para ação irreversível, rate limit e auditoria com screenshot.
+- **Percepção continua ligada** com o controle desligado: o Jarvis enxerga a
+  tela sem poder mover nada.
+
 ### ⚙️ Infraestrutura e Rede Segura
 - **Banco e Fila:** Postgres e Redis operacionais subindo automáticos com migrations validadas via Docker Compose.
 - **Zero Trust:** Cloudflare Tunnel configurado localmente. O Cloudflare Access filtra as requisições externamente e a API valida ativamente os JWTs assinados (validando o `aud` e domínio), fechando portas locais vulneráveis.

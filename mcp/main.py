@@ -64,4 +64,10 @@ discover_and_register_tools()
 if __name__ == "__main__":
     # Rodar o MCP via SSE (HTTP) na porta 8765 (evita conflitos na 8000).
     # Assim o Agente (que está isolado ou na nuvem) pode se conectar na sua máquina!
-    app.run(transport="sse", port=8765)
+    #
+    # `host` explícito em 127.0.0.1, e não o default da lib: desde que
+    # `jarvis_windows_host` entrou aqui, esta porta controla mouse e teclado da
+    # máquina. Isso não pode depender de qual default a versão instalada do
+    # FastMCP escolheu. O container chega assim mesmo — `host.docker.internal`
+    # resolve para o loopback do host.
+    app.run(transport="sse", host="127.0.0.1", port=8765)

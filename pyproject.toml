@@ -72,6 +72,19 @@ dev = [
     "types-jsonschema",
 ]
 
+# Computer use: olhos e mãos do Jarvis no Windows (`mcp/jarvis_windows_host/`).
+#
+# Extra, e não dependência normal, de propósito: estas libs só funcionam numa
+# sessão gráfica do Windows. A imagem Docker da API não as instala — e não
+# deveria, porque lá não há tela para capturar nem mouse para mover. Instale só
+# no host, com `uv sync --extra desktop`.
+desktop = [
+    "mss>=9.0",           # captura de tela rápida, sem overhead de GDI a cada frame
+    "pyautogui>=0.9.54",  # mouse e teclado (traz o failsafe do canto da tela)
+    "uiautomation>=2.0",  # árvore de acessibilidade do Windows — a percepção boa
+    "pywin32>=306",       # janelas, foco e área de transferência
+]
+
 # Layout flat: os pacotes de topo do monorepo são importáveis como `apps.*`,
 # `packages.*` e `orchestrator.*`. namespaces=true dispensa __init__.py.
 [tool.setuptools.packages.find]
