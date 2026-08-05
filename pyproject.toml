@@ -45,6 +45,12 @@ dependencies = [
     "edge-tts>=7.2.8",
     "webrtcvad>=2.0.10",
     "pydub>=0.25.1",
+    # `save_modified_image` (packages/agents/tools/executor.py) faz
+    # `from PIL import Image, ImageEnhance`. Estava sem declaração: o import mora
+    # dentro de um try/except que devolve {"error": ...}, então a tool respondia
+    # "falhou" para o modelo em toda chamada, sem log e sem crash — a edição de
+    # imagem nunca funcionou desde que foi escrita.
+    "Pillow>=10.0",
     "setuptools<70",        # Exigido pelo webrtcvad (depende de pkg_resources, removido no setuptools>=70)
     "graphifyy>=0.9.29",    # Motor do knowledge graph de memória (graphify-out)
     "agno>=2.2,<3",         # Framework para Knowledge (RAG). Pin em 2.x: a API do

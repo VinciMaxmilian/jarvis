@@ -39,7 +39,7 @@ COPY pyproject.toml ./
 # camada de dependências em vez de instalar tudo duas vezes.
 RUN python -c "import pathlib, tomllib; deps = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['dependencies']; pathlib.Path('/tmp/requirements.txt').write_text(chr(10).join(deps))" \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
-    && python -c "import fastapi, uvicorn, asyncpg, psycopg, alembic, sqlalchemy, openai, anthropic, structlog"
+    && python -c "import fastapi, uvicorn, asyncpg, psycopg, alembic, sqlalchemy, openai, anthropic, structlog, webrtcvad, faster_whisper, edge_tts, pydub, PIL"
 
 # --------------------------------------------------------------------------- #
 # Estágio 2 — runtime

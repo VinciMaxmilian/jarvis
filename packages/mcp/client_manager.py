@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, AsyncIterator
 import contextlib
@@ -114,14 +115,28 @@ class MCPClientManager:
                 pass
 
     async def get_tools_specs(self) -> list[dict[str, Any]]:
-        """Devolve as especificações das ferramentas prontas para o LLM."""
+        """Devolve as especificações das ferramentas prontas para o LLM.
+
+        NOTA DE CUSTO: isto interroga TODOS os servidores por `list_tools()`, em
+        série, e é chamado a cada mensagem (`ChiefAI.respond` monta o catálogo
+        antes de cada chamada ao modelo). Um servidor stdio lento entra
+        integralmente no tempo de resposta, e num canal de voz esse tempo é
+        silêncio. O log por servidor abaixo existe para que "está demorando" seja
+        atribuível a um nome, em vez de virar um buraco anônimo na linha do tempo.
+        """
         # Usa um dicionário para evitar duplicatas pelo nome da ferramenta
         specs_by_name = {}
         for server_name, instance in self.servers.items():
             if not instance.session:
                 continue
             try:
+                _t0 = time.perf_counter()
                 tools_result = await instance.session.list_tools()
+                _dt = time.perf_counter() - _t0
+                if _dt > 0.5:
+                    logger.warning(
+                        "mcp.list_tools.lento", server=server_name, segundos=round(_dt, 2)
+                    )
                 for tool in tools_result.tools:
                     # Apenas inclui se este servidor for a rota atual da ferramenta
                     # (isso evita duplicatas caso o servidor stdio e o SSE exportem a mesma tool)

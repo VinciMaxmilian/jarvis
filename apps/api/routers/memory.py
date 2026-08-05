@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from typing import Any
@@ -11,7 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
-from apps.api.deps import get_memory_vector_store
+from apps.api.deps import get_chat_history_store, get_memory_vector_store
 from packages.memory.vector_store import cosine_similarity
 from packages.memory.graphify_store import GraphifyVectorStore
 from packages.shared.ports import VectorStore
@@ -211,12 +212,83 @@ def _rotulo(texto: str, limite: int = 48) -> str:
     return limpo[:limite] + "…" if len(limpo) > limite else limpo or "(vazio)"
 
 
+@router.get("/version")
+async def get_memory_version() -> dict[str, Any]:
+    """Assinatura barata do estado da memória, para a UI saber quando refazer o grafo.
+
+    **Por que polling e não push.** Gravar na memória acontece em vários pontos
+    (`knowledge_save`, o indexador de conversa, a ingestão de documentos) e alguns
+    são fire-and-forget fora do ciclo de requisição. Fazer cada um deles publicar
+    um evento até o navegador exigiria acoplar todos a um canal de UI — muita
+    superfície nova para um sistema de um usuário só. Uma assinatura que a UI
+    compara resolve igual, sem tocar em nenhum caminho de escrita.
+
+    **Por que não devolver o grafo inteiro.** É esse o ponto: o grafo é caro de
+    montar (vizinhança por similaridade entre todos os nós) e a UI só precisa
+    saber SE mudou. Isto aqui lê os registros e devolve dois números.
+
+    **Por que hash do conteúdo e não `updated_at`.** A primeira versão disto usava
+    o timestamp mais recente do metadata — e ele voltava VAZIO, porque os
+    registros desta memória não guardam timestamp. A assinatura teria degradado
+    para a contagem sozinha, que não detecta edição: corrigir um fato mantém o
+    total e mudaria o grafo sem a UI perceber. O hash sobre (id, texto) pega
+    inclusão, remoção E edição, e não depende de um campo que pode não existir.
+
+    `blake2b` com digest curto: não é hash criptográfico aqui, é detector de
+    mudança, e 16 hex já tornam colisão irrelevante nesta escala.
+    """
+    # A MESMA fonte do grafo, de propósito: se a assinatura cobrisse menos do que
+    # o desenho, gravar no histórico não dispararia o refetch e a aba mostraria
+    # um retrato velho sem avisar.
+    records = await _registros_da_memoria()
+
+    h = hashlib.blake2b(digest_size=8)
+    # Ordenado por id: a ordem de `get_all()` não é contratual, e uma assinatura
+    # que muda só porque o store devolveu na outra ordem faria a UI refazer o
+    # grafo caro à toa, em looping.
+    for r in sorted(records, key=lambda x: str(x.id)):
+        h.update(str(r.id).encode())
+        h.update(b"\x00")
+        h.update((r.text or "").encode())
+        h.update(b"\x00")
+
+    return {"count": len(records), "hash": h.hexdigest()}
+
+
+# Teto de nós no grafo. O cálculo de arestas é O(n²) em similaridade de cossenos,
+# e o `chat_history` cresce a cada mensagem — sem teto, a aba que hoje monta em
+# milissegundos viraria segundos de CPU dentro de um ano de uso, num i5-3470.
+# Quando estourar, o corte é no histórico: `knowledge` é curado e pequeno, o
+# histórico é volumoso e o mais antigo é o menos interessante.
+_MAX_NOS_GRAFO = 400
+
+
+async def _registros_da_memoria() -> list[Any]:
+    """Todos os níveis que a aba Memory desenha, num só conjunto.
+
+    Até esta versão só o store `memory` entrava, e a aba mostrava três fatos
+    enquanto 39 registros de histórico ficavam invisíveis. Os dois são memória do
+    mesmo sistema e o grafo já sabia desenhá-los — `_NOMES_LOBO` mapeia
+    `chat_history` e `long_term` desde sempre, e `_lobos_da_memoria` cria um lobo
+    por namespace. Faltava só entregar os dados.
+
+    O nível `long` não aparece aqui como fonte separada de propósito: ele é um
+    NAMESPACE do mesmo store `memory` (ver packages/memory/long_term.py), então
+    entra sozinho assim que alguém gravar nele — hoje está vazio porque nada
+    escreve ali ainda.
+    """
+    principais = await get_memory_vector_store().get_all()
+    historico = await get_chat_history_store().get_all()
+
+    # O corte cai no histórico, e sobra espaço para o `knowledge` inteiro.
+    espaco = max(0, _MAX_NOS_GRAFO - len(principais))
+    return [*principais, *historico[:espaco]]
+
+
 @router.get("/graph.json")
-async def get_memory_graph_json(
-    store: VectorStore = Depends(get_memory_vector_store)
-):
+async def get_memory_graph_json():
     """Retorna o grafo JSON no formato NeuralMap (nós + links + lobos)."""
-    records = await store.get_all()
+    records = await _registros_da_memoria()
 
     namespaces = sorted({r.namespace for r in records}) or ["default"]
     indice_ns = {ns: i for i, ns in enumerate(namespaces)}

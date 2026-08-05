@@ -520,3 +520,95 @@
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
   color: var(--color-text);
 }
+
+/* --------------------------------------------------------------------------
+   .tool-chip — etiqueta da ferramenta que o agente acabou de chamar.
+
+   Injetada como HTML inline pelo ChatPage e renderizada pelo rehype-raw do
+   MarkdownRenderer. Antes era texto cru ("⚡ nome") com um \n só na frente, o
+   que em markdown não fecha parágrafo: o rótulo colava na resposta e saía
+   "⚡ analyze_imageA imagem que o Senhor me enviou...".
+
+   `display:inline-flex` com `width:fit-content` para a etiqueta abraçar o texto
+   em vez de esticar na largura da bolha. Tabular-nums não entra aqui de
+   propósito: nome de tool é identificador, não número.
+   -------------------------------------------------------------------------- */
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4em;
+  width: fit-content;
+  padding: .18em .6em;
+  border-radius: 999px;
+  font-size: .78em;
+  font-weight: 500;
+  letter-spacing: .01em;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  color: hsl(190 85% 45%);
+  background: hsl(190 85% 45% / .10);
+  border: 1px solid hsl(190 85% 45% / .28);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tool-chip {
+    color: hsl(190 90% 68%);
+    background: hsl(190 90% 60% / .12);
+    border-color: hsl(190 90% 60% / .30);
+  }
+}
+:root[data-theme="dark"] .tool-chip {
+  color: hsl(190 90% 68%);
+  background: hsl(190 90% 60% / .12);
+  border-color: hsl(190 90% 60% / .30);
+}
+:root[data-theme="light"] .tool-chip {
+  color: hsl(190 85% 38%);
+  background: hsl(190 85% 45% / .10);
+  border-color: hsl(190 85% 45% / .28);
+}
+
+/* --------------------------------------------------------------------------
+   .voice-dock — o painel da chamada de voz.
+
+   Era um overlay `inset:0` com backdrop escuro: durante a chamada o chat
+   desaparecia, justamente quando o dono mais precisa dele (pedir por voz para
+   pesquisar/abrir algo e ver o resultado chegando). Agora ocupa espaço morto em
+   vez de cobrir espaço útil.
+
+   DESKTOP: a coluna da barra lateral (240px), abaixo das abas. O conteúdo
+   principal continua inteiro e legível à direita.
+
+   MOBILE (<=768px): a barra lateral não existe (`.desktop-sidebar{display:none}`
+   em index.css, mesmo breakpoint), então o painel vira uma faixa presa acima da
+   navegação inferior — o único espaço livre que sobra ali.
+   -------------------------------------------------------------------------- */
+.voice-dock {
+  position: fixed;
+  z-index: 50;
+  left: 8px;
+  width: 224px;
+  bottom: 12px;
+  display: flex;
+  animation: voice-dock-entra .18s ease-out;
+}
+
+@keyframes voice-dock-entra {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: none }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-dock { animation: none }
+}
+
+@media (max-width: 768px) {
+  .voice-dock {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    /* Acima da navegação inferior, respeitando o notch. */
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}

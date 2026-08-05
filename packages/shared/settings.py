@@ -100,6 +100,26 @@ class Settings(BaseSettings):
     # --- tools ------------------------------------------------------------- #
     tavily_api_key: str = Field(..., description="Chave da API Tavily (busca web, v0)")
 
+    # --- voz: síntese (TTS) ------------------------------------------------- #
+    #
+    # Nenhum destes é obrigatório, de propósito. `packages/voice/tts.py` monta o
+    # provider e SEMPRE mantém o `edge` (gratuito, sem chave) como rede: sem
+    # chave, provider desconhecido ou falha em runtime caem nele com aviso. Uma
+    # conversa por voz que morre porque um campo opcional ficou vazio seria o
+    # oposto do que o fail-fast do Settings existe para fazer.
+    #
+    # Default `gemini` por razão operacional, não técnica: `gemini_api_key` já
+    # existe acima e já é validada, então não há conta, fatura nem segredo novo.
+    # O TTS do Gemini ainda devolve PCM 24 kHz, que é o contrato do player do PWA
+    # — nenhum transcode no caminho.
+    tts_provider: Literal["gemini", "edge"] = "gemini"
+    # Vazios significam "use o default do módulo" (`GEMINI_TTS_MODEL` /
+    # `GEMINI_TTS_VOICE`). Existem para trocar de voz ou reagir a uma renomeação
+    # de modelo pelo .env, sem commit.
+    tts_gemini_model: str = ""
+    tts_gemini_voice: str = ""
+    tts_edge_voice: str = "pt-BR-AntonioNeural"
+
     # --- Cloudflare Access (autenticação na borda, verificada na origem) ---- #
     #
     # `plan.md` §36 põe a identidade no Cloudflare Access, na frente do Tunnel.

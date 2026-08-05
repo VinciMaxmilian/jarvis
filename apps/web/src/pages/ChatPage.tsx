@@ -63,6 +63,25 @@ function aplicarTexto(
   ]
 }
 
+// Tool nativa → arquivo que a implementa, para o grafo de fundo acender o
+// código que está de fato executando. Os caminhos batem com `source_file` dos
+// nós do graphify (o Engine casa por substring nos dois sentidos, então o
+// caminho relativo do repositório é o formato certo aqui).
+//
+// Só as NATIVAS entram: as de MCP nascem em runtime, com nomes que ninguém
+// escreveu aqui, e caem no default `mcp/` — que acende a pasta inteira. Melhor
+// acender o bairro certo do que exigir uma lista que envelhece a cada servidor
+// novo que o próprio agente cria com `criar_servidor_mcp`.
+const ARQUIVO_POR_TOOL: Record<string, string> = {
+  web_search: 'packages/agents/tools/executor.py',
+  search_memory: 'packages/agents/tools/executor.py',
+  knowledge_save: 'packages/agents/tools/executor.py',
+  knowledge_forget: 'packages/agents/tools/executor.py',
+  analyze_image: 'packages/agents/tools/executor.py',
+  save_modified_image: 'packages/agents/tools/executor.py',
+  criar_servidor_mcp: 'packages/agents/tools/executor.py',
+}
+
 function useChat(initialConversationId?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isConnected, setIsConnected] = useState(false)
@@ -168,24 +187,49 @@ function useChat(initialConversationId?: string) {
           if (typeof args === 'string') {
             try { args = JSON.parse(args); } catch(e) {}
           }
-          let targetPath = "";
-          // Extract file path from common tool arguments
-          if (typeof args.TargetFile === 'string') targetPath = args.TargetFile;
-          else if (typeof args.AbsolutePath === 'string') targetPath = args.AbsolutePath;
-          else if (typeof args.SearchPath === 'string') targetPath = args.SearchPath;
-          else if (typeof args.DirectoryPath === 'string') targetPath = args.DirectoryPath;
-          else if (typeof args.Target === 'string') targetPath = args.Target;
+          // Quais arquivos do grafo acender.
+          //
+          // Este bloco procurava por `TargetFile`, `AbsolutePath`, `SearchPath`,
+          // `DirectoryPath` e `Target` — nomes de argumento de OUTRO agente,
+          // que nenhuma tool deste projeto usa. `targetPath` ficava sempre
+          // vazio e nada acendia nunca. Somado a isso, o backend não emitia
+          // `tool_call` (ver o yield em packages/agents/chief.py), então o
+          // bloco inteiro era inalcançável: dois motivos independentes para o
+          // mesmo sintoma, e consertar só um deles não teria mostrado nada.
+          //
+          // Agora o alvo é o CÓDIGO QUE ESTÁ RODANDO: usar `web_search` acende
+          // o arquivo que a implementa. É o que faz o grafo de fundo contar o
+          // que o agente está fazendo, em vez de decorar a tela.
+          const alvos = new Set<string>();
 
-          if (targetPath) {
-            // Convert absolute path to relative or just use it, Engine does fuzzy matching
-            setActiveNodes(prev => {
-              const next = new Set(prev);
-              next.add(targetPath);
-              return Array.from(next);
-            });
+          // Tool que carrega um caminho de verdade (as de sistema de arquivos,
+          // via MCP) acende o próprio arquivo citado.
+          for (const chave of ['path', 'file_path', 'filepath', 'arquivo', 'caminho']) {
+            const v = (args as Record<string, unknown>)[chave];
+            if (typeof v === 'string' && v.trim()) alvos.add(v);
           }
 
-          streamBufferRef.current += `\n⚡ ${chunk.tool_call.name}`;
+          // As tools nativas moram todas no executor; as de MCP, na pasta mcp/.
+          // `ARQUIVO_POR_TOOL` cobre as nativas pelo nome; o resto é MCP por
+          // eliminação, porque o catálogo de MCP nasce em runtime e nunca vai
+          // caber numa lista escrita aqui.
+          alvos.add(ARQUIVO_POR_TOOL[chunk.tool_call.name] ?? 'mcp/');
+
+          setActiveNodes(prev => Array.from(new Set([...prev, ...alvos])));
+
+          // Bloco próprio, com linha em branco dos DOIS lados.
+          //
+          // Era `\n⚡ nome`: um \n só não fecha parágrafo em markdown, então o
+          // rótulo grudava na frase seguinte e saía "⚡ analyze_imageA imagem
+          // que o Senhor me enviou..." — foi assim que apareceu na tela.
+          //
+          // `<span class="tool-chip">` em vez de texto puro para o rótulo poder
+          // ser estilizado como etiqueta (ver industry.css). O `rehype-raw` do
+          // MarkdownRenderer já permite HTML inline, então não precisa de
+          // componente novo.
+          const rotulo = `<span class="tool-chip">⚡ ${chunk.tool_call.name}</span>`;
+          const sep = streamBufferRef.current.trim() ? '\n\n' : '';
+          streamBufferRef.current += `${sep}${rotulo}\n\n`;
           const currentText = streamBufferRef.current;
           const currentId = streamingIdRef.current;
           setMessages(prev =>

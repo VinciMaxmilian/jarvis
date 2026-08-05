@@ -570,9 +570,24 @@ class SystemToolExecutor:
     ) -> dict[str, object]:
         if dry_run:
             return {"dry_run": True, "action": "analyze_image", "image_url": image_url}
-        # Apenas dizemos que a imagem foi recebida com sucesso.
-        # A interface de websocket capturará a chamada da ferramenta para abrir o modal
-        return {"sucesso": True, "mensagem": f"Iniciada a análise da imagem {image_url}. A interface foi notificada."}
+        # Esta tool NÃO analisa nada, e nunca analisou: ela existe só para o
+        # roteador de chat capturar a chamada e abrir o modal de imagem no PWA.
+        #
+        # A mensagem antiga ("Iniciada a análise... A interface foi notificada")
+        # induzia o modelo ao erro: ele entendia que ALGUÉM iria analisar e
+        # ficava esperando um laudo que nunca vinha, então inventava um. O modelo
+        # é multimodal e a imagem já está no contexto — quem analisa é ele
+        # próprio, agora, olhando. Dizer isso explicitamente é o conserto.
+        return {
+            "sucesso": True,
+            "instrucao": (
+                "Esta ferramenta apenas abriu o visualizador de imagem para o "
+                "dono. Ela NÃO devolve análise. A imagem já está visível para "
+                "você nesta conversa: descreva o que você mesmo está vendo, "
+                "agora, e nunca invente conteúdo nem espere um resultado desta "
+                "ferramenta."
+            ),
+        }
 
     async def _save_modified_image(
         self, image_url: str, brightness: float, contrast: float, saturation: float, dry_run: bool = False
@@ -617,11 +632,32 @@ class SystemToolExecutor:
             os.makedirs(save_dir, exist_ok=True)
             filename = f"mod_{uuid.uuid4().hex[:8]}.png"
             filepath = os.path.join(save_dir, filename)
-            
+
             img.save(filepath, format="PNG")
-            
-            return {"sucesso": True, "caminho": filepath, "mensagem": f"Imagem salva em {filepath}"}
+
+            # `url` é o campo que importa para quem consome. Antes daqui a tool
+            # devolvia só `caminho` — um path de filesystem do CONTAINER, que o
+            # navegador não abre e que o modelo repetia de volta ao dono como se
+            # fosse endereço. O mount de /media/images (apps/api/main.py) serve
+            # este diretório; `caminho` fica para depuração no host.
+            url = f"/media/images/{filename}"
+            return {
+                "sucesso": True,
+                "url": url,
+                "caminho": filepath,
+                "mensagem": f"Imagem salva e disponível em {url}",
+            }
         except Exception as exc:
+            # Sem log, este except transformava qualquer falha (Pillow ausente,
+            # URL morta, formato ilegível) num "não deu certo" mudo para o
+            # modelo, que então improvisava uma explicação. O `logger` do módulo
+            # já existia e não era usado neste caminho.
+            logger.error(
+                "tool.save_modified_image.failed",
+                image_url=image_url[:120],
+                error=str(exc),
+                exc_info=True,
+            )
             return {"error": str(exc)}
 
 __all__ = ["SystemToolExecutor", "TAVILY_SEARCH_SPEC", "SEARCH_MEMORY_SPEC", "CRIAR_SERVIDOR_MCP_SPEC", "KNOWLEDGE_SAVE_SPEC", "KNOWLEDGE_FORGET_SPEC", "ANALYZE_IMAGE_SPEC", "SAVE_MODIFIED_IMAGE_SPEC"]

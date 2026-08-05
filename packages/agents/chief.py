@@ -13,8 +13,11 @@ o comportamento de antes desta separação, preservado de propósito.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -119,7 +122,12 @@ class ChiefAI:
         sys_prompt = self._system_prompt
         sys_prompt += f"\n\n[INFO DE CONTEXTO OBRIGATÓRIA]: O usuário atual falando com você nesta sessão é: {current_user_email}."
 
+        _t = time.perf_counter()
         history = await self._conv.history(conversation_id, limit=30)
+        _dt = time.perf_counter() - _t
+        if _dt > 0.5:
+            logger.warning("perf.historico_lento", segundos=round(_dt, 2))
+        _t_rag = time.perf_counter()
         
         # ---------------------------------------------------------------------- #
         # RAG automático: injeta contexto da base de conhecimento e do histórico
@@ -128,9 +136,22 @@ class ChiefAI:
         # exclusivamente deste contexto para responder com fatos reais.
         # ---------------------------------------------------------------------- #
         try:
-            # 1. Knowledge base (fatos, preferências do usuário)
-            kb_textos: list[str] = []
-            if self._agno_knowledge:
+            # PARALELISMO: a busca do Agno e o embedding local são independentes e
+            # cada um custa uma ida à rede (~0,7s). Em série somavam; juntos, o
+            # tempo é o do mais lento.
+            #
+            # O embedding é especulativo de propósito: ele só é USADO se o Agno não
+            # trouxer nada (o fallback abaixo) ou se o histórico estiver vazio. Mas
+            # descobrir isso exige esperar o Agno, e aí não haveria mais o que
+            # paralelizar. O desperdício quando o Agno acerta é uma chamada de
+            # embedding barata; o ganho quando ele não acerta é a latência inteira
+            # dela. A troca vale porque a base do Agno hoje devolve zero documentos
+            # na maioria das perguntas — ou seja, o caminho comum é o fallback.
+            vetores: list[list[float]] | None = None
+
+            async def _buscar_agno() -> list[str]:
+                if not self._agno_knowledge:
+                    return []
                 # Agno 2.x: search(max_results=...). Se o Agno falhar (banco fora,
                 # embedder sem chave), cai no vector store local em vez de deixar
                 # o agente sem NENHUM contexto — era o que acontecia antes, porque
@@ -141,44 +162,65 @@ class ChiefAI:
                     docs = await search_knowledge(
                         user_text, limit=5, knowledge=self._agno_knowledge
                     )
-                    kb_textos = documents_to_texts(docs)
+                    return documents_to_texts(docs)
                 except Exception as exc:
                     logger.warning("memory.rag.agno_knowledge_failed", error=str(exc))
+                    return []
 
-                if kb_textos:
-                    kb_context = "\n".join(f"- {t}" for t in kb_textos)
-                    sys_prompt += (
-                        f"\n\n<knowledge_base>\n"
-                        f"Fatos e preferências do usuário (base de conhecimento — USE ESTAS INFORMAÇÕES, são fatos reais e confirmados):\n"
-                        f"{kb_context}\n"
-                        f"</knowledge_base>"
-                    )
-                    logger.info("memory.rag.agno_knowledge_injected", matches=len(kb_textos))
+            async def _embutir() -> list[list[float]] | None:
+                if not (self._memory_store or self._chat_history_store):
+                    return None
+                try:
+                    return await self._embed_llm.embed([user_text])
+                except Exception as exc:
+                    logger.warning("memory.rag.embed_failed", error=str(exc))
+                    return None
 
-            if not kb_textos and self._memory_store:
-                vetores = await self._embed_llm.embed([user_text])
-                kb_matches = await self._memory_store.search(
+            kb_textos, vetores = await asyncio.gather(_buscar_agno(), _embutir())
+
+            _CABECALHO_KB = (
+                "Fatos e preferências do usuário (base de conhecimento — "
+                "USE ESTAS INFORMAÇÕES, são fatos reais e confirmados):"
+            )
+
+            if kb_textos:
+                kb_context = "\n".join(f"- {t}" for t in kb_textos)
+                sys_prompt += (
+                    f"\n\n<knowledge_base>\n{_CABECALHO_KB}\n{kb_context}\n</knowledge_base>"
+                )
+                logger.info("memory.rag.agno_knowledge_injected", matches=len(kb_textos))
+
+            # As duas buscas restantes também são independentes entre si: uma olha
+            # a memória de conhecimento, a outra o histórico de conversas. Ambas
+            # consomem o MESMO vetor já calculado acima — antes desta versão o
+            # embedding era refeito aqui, e o `if 'vetores' not in locals()` que
+            # evitava isso dependia de introspecção de escopo local, que quebra em
+            # silêncio se alguém renomear a variável.
+            tarefas: dict[str, Any] = {}
+            if vetores and not kb_textos and self._memory_store:
+                tarefas["memoria"] = self._memory_store.search(
                     vetores[0], namespace="knowledge", limit=5
                 )
-                if kb_matches:
-                    kb_context = "\n".join(
-                        f"- {m.record.text}" for m in kb_matches
-                    )
-                    sys_prompt += (
-                        f"\n\n<knowledge_base>\n"
-                        f"Fatos e preferências do usuário (base de conhecimento — USE ESTAS INFORMAÇÕES, são fatos reais e confirmados):\n"
-                        f"{kb_context}\n"
-                        f"</knowledge_base>"
-                    )
-                    logger.info("memory.rag.knowledge_injected", matches=len(kb_matches))
-            
-            # 2. Histórico de conversas passadas (apenas na primeira msg da conversa)
-            if not history and self._chat_history_store:
-                if 'vetores' not in locals():
-                    vetores = await self._embed_llm.embed([user_text])
-                hist_matches = await self._chat_history_store.search(
+            # Histórico passado só na primeira mensagem da conversa.
+            if vetores and not history and self._chat_history_store:
+                tarefas["historico"] = self._chat_history_store.search(
                     vetores[0], namespace="chat_history", limit=5
                 )
+
+            if tarefas:
+                resultados = dict(
+                    zip(tarefas, await asyncio.gather(*tarefas.values()))
+                )
+
+                kb_matches = resultados.get("memoria") or []
+                if kb_matches:
+                    kb_context = "\n".join(f"- {m.record.text}" for m in kb_matches)
+                    sys_prompt += (
+                        f"\n\n<knowledge_base>\n{_CABECALHO_KB}\n{kb_context}\n</knowledge_base>"
+                    )
+                    logger.info("memory.rag.knowledge_injected", matches=len(kb_matches))
+
+                hist_matches = resultados.get("historico") or []
                 if hist_matches:
                     past_context = "\n".join(
                         f"- {m.record.text} (Data: {m.record.metadata.get('updated_at', 'desconhecida')})"
@@ -193,6 +235,12 @@ class ChiefAI:
         except Exception as exc:
             logger.warning("memory.rag.failed", error=str(exc))
 
+        # Só loga quando dói. Estado estável medido: ~0,8s. Acima de 2s há algo
+        # errado (banco lento, embedder fora), e é isso que vale aparecer.
+        _dt_rag = time.perf_counter() - _t_rag
+        if _dt_rag > 2.0:
+            logger.warning("perf.rag_lento", segundos=round(_dt_rag, 2))
+
         messages = [Message(role="system", content=sys_prompt)]
         for h in history:
             messages.append(
@@ -205,17 +253,40 @@ class ChiefAI:
 
         # O envelope do perfil resolve as duas formas do catálogo (síncrona e
         # async) e devolve só o que este papel pode chamar.
+        #
+        # MEDIDO: este passo interroga cada servidor MCP por `list_tools()`, em
+        # série, ANTES de toda chamada ao modelo. O tempo aparece como silêncio
+        # numa conversa por voz, então ele é logado quando passa de meio segundo.
+        _t_specs = time.perf_counter()
         tool_specs = await self._tools.get_all_specs()
+        _dt_specs = time.perf_counter() - _t_specs
+        if _dt_specs > 0.5:
+            logger.warning(
+                "agent.catalogo_lento", segundos=round(_dt_specs, 2), tools=len(tool_specs)
+            )
 
         max_tool_rounds = 5
 
         for _round in range(max_tool_rounds):
             # LLM call (non-streaming para tool loop)
             # Imagens são enviadas no primeiro turno, depois limpamos para não enviar de novo repetidamente
+            # A imagem acompanha TODAS as rodadas deste turno, não só a primeira.
+            #
+            # Com `_round == 0`, o agente ficava CEGO assim que chamasse qualquer
+            # ferramenta: a rodada seguinte chegava ao modelo sem a imagem, e ele
+            # então descrevia de memória. Observado em produção — anexo de uma
+            # foto de gato, o modelo chamou `analyze_image`, perdeu a visão
+            # (input_tokens caiu de 4191 para 3165) e descreveu a última imagem
+            # que conhecia do histórico. A resposta saiu confiante e errada, que
+            # é o pior formato possível para esse defeito.
+            #
+            # Custa reenviar a imagem por rodada? Custa. Mas o laço é limitado a
+            # `max_tool_rounds`, é o MESMO turno do dono, e a alternativa é um
+            # agente multimodal que perde a visão no meio da própria resposta.
             completion = await self._completar(
                 messages=messages,
                 tools=tool_specs if tool_specs else None,
-                images=images if _round == 0 else None
+                images=images,
             )
 
             logger.info(
@@ -284,6 +355,21 @@ class ChiefAI:
                     name=tc.name,
                     args=tc.arguments,
                 )
+                # ANÚNCIO ANTES DA EXECUÇÃO — este yield faltava.
+                #
+                # `StreamChunk.type` sempre declarou `"tool_call"`
+                # (packages/llm/base.py), e DOIS consumidores já o tratavam: o
+                # roteador de chat, que emite `image_analysis_started` para o PWA
+                # abrir o modal de imagem, e o de voz, que fala "deixa eu
+                # procurar" enquanto a ferramenta roda. Nenhum dos dois jamais
+                # executou, porque este ponto — o único lugar que sabe que uma
+                # tool vai rodar — nunca anunciava. Os dois recursos pareciam
+                # implementados e eram código morto.
+                #
+                # Emitido ANTES do `await` de propósito: o valor do evento é
+                # justamente cobrir a espera. Depois da execução ele não teria
+                # nada a esconder.
+                yield StreamChunk(type="tool_call", tool_call=tc)
                 try:
                     result = await self._tools.execute(tc.name, tc.arguments)
                     result_str = json.dumps(result, ensure_ascii=False, default=str)

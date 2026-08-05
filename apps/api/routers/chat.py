@@ -14,12 +14,20 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from apps.api.db.repository import PgConversationStore
 from apps.api.deps import get_chief_ai, get_db, get_llm_provider, get_chat_history_store
 from packages.memory.indexer import index_conversation_message
 
 router = APIRouter()
+
+# Até esta versão o módulo não tinha logger nenhum, e as DUAS formas de uma
+# mensagem falhar mandavam o texto do erro só para o navegador. O servidor não
+# guardava cópia: no log, a mensagem simplesmente parava depois da indexação e
+# do RAG, sem erro e sem traceback — indistinguível de uma mensagem que nunca
+# chegou. Diagnosticar dependia de o dono ter lido o balão vermelho na tela.
+logger = structlog.get_logger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -125,14 +133,40 @@ async def chat_ws(websocket: WebSocket) -> None:
                         elif chunk.type == "tool_call" and chunk.tool_call:
                             if chunk.tool_call.name == "analyze_image":
                                 img_url = chunk.tool_call.arguments.get("image_url")
-                                if img_url:
+                                # Só abre o visualizador para algo que o navegador
+                                # consegue carregar. O modelo não recebe a imagem
+                                # como URL (ela vai por `inlineData`), então
+                                # quando resolve chamar esta tool ele INVENTA um
+                                # nome — observado: `input_file_0.png`. O modal
+                                # abria com src quebrado e virava um painel torto
+                                # no canto da tela, sem imagem e sem explicação.
+                                if isinstance(img_url, str) and img_url.startswith(
+                                    ("http://", "https://", "data:", "/media/")
+                                ):
                                     await websocket.send_text(json.dumps({"type": "image_analysis_started", "image_url": img_url}, default=str))
+                                elif img_url:
+                                    logger.info(
+                                        "chat.ws.image_url_invalida",
+                                        valor=str(img_url)[:120],
+                                    )
                                     
                             payload["tool_call"] = {
                                 "name": chunk.tool_call.name,
                                 "arguments": chunk.tool_call.arguments,
                             }
                         elif chunk.type == "error":
+                            # Caminho silencioso nº2, e o mais fácil de perder:
+                            # isto NÃO passa pelo `except` abaixo. O provider
+                            # devolve falha esperada como chunk, não como
+                            # exceção — o timeout do Gemini
+                            # (gemini_provider.py, read=180s) chega exatamente
+                            # por aqui. Sem esta linha, um modelo que estourou o
+                            # tempo é indistinguível no log de um que respondeu.
+                            logger.error(
+                                "chat.ws.stream_error",
+                                conv_id=str(conv_id),
+                                error=chunk.error,
+                            )
                             payload["error"] = chunk.error
                         elif chunk.type == "done":
                             payload["conversation_id"] = str(conv_id)
@@ -142,6 +176,16 @@ async def chat_ws(websocket: WebSocket) -> None:
                     await session.commit()
                 except Exception as exc:
                     await session.rollback()
+                    # exc_info=True é o ponto todo: `str(exc)` de um
+                    # ExceptionGroup rende "unhandled errors in a TaskGroup
+                    # (1 sub-exception)", que é o mesmo texto inútil que o
+                    # loader de MCP já produz. O traceback traz a sub-exceção.
+                    logger.error(
+                        "chat.ws.failed",
+                        conv_id=str(conv_id),
+                        error=str(exc),
+                        exc_info=True,
+                    )
                     await websocket.send_text(
                         json.dumps({"type": "error", "error": str(exc)})
                     )

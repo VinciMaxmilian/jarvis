@@ -54,7 +54,7 @@ COPY pyproject.toml ./
 # orchestrator/Dockerfile — é o que faz os dois builds compartilharem a camada.
 RUN python -c "import pathlib, tomllib; deps = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['dependencies']; pathlib.Path('/tmp/requirements.txt').write_text(chr(10).join(deps))" \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
-    && python -c "import fastapi, uvicorn, asyncpg, psycopg, alembic, sqlalchemy, openai, anthropic, structlog"
+    && python -c "import fastapi, uvicorn, asyncpg, psycopg, alembic, sqlalchemy, openai, anthropic, structlog, webrtcvad, faster_whisper, edge_tts, pydub, PIL"
 
 # --------------------------------------------------------------------------- #
 # Estágio 2 — runtime
@@ -73,6 +73,34 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Só o venv atravessa. Nada de pip cache, nada de toolchain.
 COPY --from=builder /opt/venv /opt/venv
+
+# --------------------------------------------------------------------------- #
+# ffmpeg — decodificador de MP3 do caminho de voz (apps/api/routers/voice.py).
+#
+# Por que um BINÁRIO e não um pacote pip: o `pydub` não decodifica MP3 sozinho.
+# Ele monta uma linha de comando e chama `ffmpeg`/`avconv` por subprocesso. Sem o
+# executável no PATH, `pip install pydub` instala com sucesso, o import passa
+# (só emite um RuntimeWarning) e a falha só aparece no primeiro
+# `AudioSegment.from_file(..., format="mp3")` — em produção, no meio de uma
+# conversa por voz. Ou seja: é a única dependência da API que o pyproject.toml
+# NÃO consegue declarar, e por isso mora aqui.
+#
+# Onde ele é exigido: o edge-tts devolve MP3, e voice.py decodifica para
+# reamostrar a 24 kHz mono 16-bit e mandar PCM cru pelo WebSocket, que é o que o
+# player do PWA espera. Trocar o front para receber MP3 e decodificar com
+# `decodeAudioData` eliminaria esta dependência inteira — vale reconsiderar se o
+# tamanho da imagem apertar.
+#
+# Não confundir com o `export(format="wav")` da mesma rota: WAV o pydub escreve
+# pelo módulo `wave` da stdlib, sem tocar no ffmpeg. Só o lado do MP3 precisa.
+#
+# NÃO está no runtime do orchestrator de propósito: aquele serviço importa
+# apps.api.db, apps.api.deps e packages.agents.*, nunca routers/voice.py.
+RUN set -eux; \
+    apt-get update -qq; \
+    apt-get install -y -qq --no-install-recommends ffmpeg; \
+    rm -rf /var/lib/apt/lists/*; \
+    ffmpeg -version
 
 # --------------------------------------------------------------------------- #
 # postgresql-client-16 — o binário `pg_dump` do job de backup (v1.4).

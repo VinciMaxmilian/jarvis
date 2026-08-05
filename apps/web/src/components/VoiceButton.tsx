@@ -3,31 +3,134 @@ import { useDesktopIntegration } from '../hooks/useDesktopIntegration';
 import { useVoiceCall } from '../hooks/useVoiceCall';
 import { useWakeWord } from '../hooks/useWakeWord';
 
-const SphereOfDots = () => {
-  const dots = Array.from({ length: 12 });
-  
+/**
+ * HUD circular no estilo do painel do J.A.R.V.I.S.: anéis concêntricos,
+ * marcações radiais e arcos segmentados girando em sentidos opostos.
+ *
+ * Em SVG e não em imagem: o desenho precisa REAGIR ao estado da chamada — os
+ * arcos aceleram quando o agente fala e desaceleram quando ele ouve —, e um
+ * PNG só saberia ficar parado. Também sai de graça em qualquer resolução e não
+ * soma um byte ao precache do PWA.
+ *
+ * Uma peça de vidro só (`ritmo`) controla toda a animação: com `prefers-reduced-motion`
+ * o navegador congela as rotações via CSS, e o componente continua legível
+ * porque a informação está na FORMA, não no movimento.
+ */
+const JarvisHUD = ({ falando }: { falando: boolean }) => {
+  const C = 120; // centro do viewBox 240x240
+
+  // Marcações radiais do anel externo. 72 traços = um a cada 5 graus, dividido
+  // em grupos de 6 para criar os blocos com respiro que o painel original tem.
+  const ticks = Array.from({ length: 72 }, (_, i) => {
+    const a = (i * 5 * Math.PI) / 180;
+    const longo = i % 6 === 0;
+    const r1 = longo ? 100 : 106;
+    const r2 = 112;
+    return (
+      <line
+        key={i}
+        x1={C + Math.cos(a) * r1} y1={C + Math.sin(a) * r1}
+        x2={C + Math.cos(a) * r2} y2={C + Math.sin(a) * r2}
+        stroke="currentColor"
+        strokeWidth={longo ? 2 : 1}
+        opacity={longo ? 0.9 : 0.35}
+      />
+    );
+  });
+
+  // Arco por ângulo — os segmentos grossos que giram.
+  const arco = (r: number, de: number, ate: number) => {
+    const p = (g: number) => [
+      C + r * Math.cos((g * Math.PI) / 180),
+      C + r * Math.sin((g * Math.PI) / 180),
+    ];
+    const [x1, y1] = p(de);
+    const [x2, y2] = p(ate);
+    const grande = ate - de > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${grande} 1 ${x2} ${y2}`;
+  };
+
+  const rapido = falando ? 1 : 2.4; // multiplicador de duração: falando = mais rápido
+
   return (
-    <div style={{ position: 'relative', width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {dots.map((_, i) => {
-        const angle = (i * 360) / dots.length;
-        return (
-          <div
-            key={i}
-            className="animate-pulse-ring"
-            style={{
-              position: 'absolute',
-              width: 12,
-              height: 12,
-              background: 'var(--accent)',
-              borderRadius: '50%',
-              transform: `rotate(${angle}deg) translate(40px)`,
-              animationDelay: `${i * 0.1}s`,
-              animationDuration: '1.2s'
-            }}
-          />
-        );
-      })}
-      <div className="animate-pulse-ring" style={{ position: 'absolute', width: 48, height: 48, background: 'var(--accent-glow)', borderRadius: '50%' }} />
+    // Largura fluida com teto: o painel agora vive numa coluna de 224px, e um
+    // HUD de 200px fixos estouraria o padding. `aspectRatio` mantém o círculo
+    // redondo em qualquer largura.
+    <div style={{
+      position: 'relative', width: '100%', maxWidth: 168, aspectRatio: '1',
+      color: 'hsl(190 90% 60%)',
+    }}>
+      <style>{`
+        @keyframes jhud-cw  { to { transform: rotate(360deg) } }
+        @keyframes jhud-ccw { to { transform: rotate(-360deg) } }
+        @keyframes jhud-pulso {
+          0%,100% { opacity: .45; transform: scale(.94) }
+          50%     { opacity: 1;   transform: scale(1.06) }
+        }
+        .jhud-gira { transform-origin: 120px 120px; }
+        @media (prefers-reduced-motion: reduce) {
+          .jhud-gira, .jhud-nucleo { animation: none !important }
+        }
+      `}</style>
+
+      <svg viewBox="0 0 240 240" width="100%" height="100%"
+           style={{ display: 'block', filter: 'drop-shadow(0 0 6px hsl(190 90% 55% / .55))' }}>
+        <defs>
+          <radialGradient id="jhud-core">
+            <stop offset="0%"   stopColor="hsl(190 100% 85%)" stopOpacity=".95" />
+            <stop offset="55%"  stopColor="hsl(195 95% 55%)"  stopOpacity=".55" />
+            <stop offset="100%" stopColor="hsl(200 90% 45%)"  stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        {/* anel externo com as marcações — gira devagar, sempre */}
+        <g className="jhud-gira" style={{ animation: `jhud-cw ${60 * rapido}s linear infinite` }}>
+          {ticks}
+        </g>
+        <circle cx={C} cy={C} r="114" fill="none" stroke="currentColor" strokeWidth="1" opacity=".3" />
+
+        {/* arcos grossos, horário */}
+        <g className="jhud-gira" style={{ animation: `jhud-cw ${8 * rapido}s linear infinite` }}>
+          <path d={arco(92, -80, 20)} fill="none" stroke="currentColor" strokeWidth="5" opacity=".85" strokeLinecap="round" />
+          <path d={arco(92, 110, 170)} fill="none" stroke="currentColor" strokeWidth="5" opacity=".55" strokeLinecap="round" />
+          <path d={arco(92, 200, 230)} fill="none" stroke="currentColor" strokeWidth="2" opacity=".9" strokeLinecap="round" />
+        </g>
+
+        {/* anel tracejado, anti-horário */}
+        <g className="jhud-gira" style={{ animation: `jhud-ccw ${14 * rapido}s linear infinite` }}>
+          <circle cx={C} cy={C} r="78" fill="none" stroke="currentColor" strokeWidth="1.5"
+                  strokeDasharray="3 7" opacity=".7" />
+        </g>
+
+        {/* anel interno segmentado, horário mais rápido */}
+        <g className="jhud-gira" style={{ animation: `jhud-cw ${5 * rapido}s linear infinite` }}>
+          <path d={arco(62, -40, 60)} fill="none" stroke="currentColor" strokeWidth="8" opacity=".35" />
+          <path d={arco(62, 100, 210)} fill="none" stroke="currentColor" strokeWidth="8" opacity=".22" />
+        </g>
+
+        {/* raios internos, anti-horário */}
+        <g className="jhud-gira" style={{ animation: `jhud-ccw ${20 * rapido}s linear infinite` }}>
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i * 45 * Math.PI) / 180;
+            return (
+              <line key={i}
+                x1={C + Math.cos(a) * 34} y1={C + Math.sin(a) * 34}
+                x2={C + Math.cos(a) * 46} y2={C + Math.sin(a) * 46}
+                stroke="currentColor" strokeWidth="1.5" opacity=".55" />
+            );
+          })}
+        </g>
+
+        <circle cx={C} cy={C} r="46" fill="none" stroke="currentColor" strokeWidth="1" opacity=".45" />
+
+        {/* núcleo: é ele que marca "está falando" */}
+        <circle className="jhud-nucleo" cx={C} cy={C} r="30" fill="url(#jhud-core)"
+                style={{
+                  transformOrigin: '120px 120px',
+                  animation: `jhud-pulso ${falando ? 1.1 : 2.6}s ease-in-out infinite`,
+                }} />
+        <circle cx={C} cy={C} r="16" fill="none" stroke="currentColor" strokeWidth="1.5" opacity=".8" />
+      </svg>
     </div>
   );
 };
@@ -117,14 +220,26 @@ export const VoiceButton: React.FC = () => {
 
       {/* Full screen modal for active call */}
       {showModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', 
-          backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', 
-          justifyContent: 'center', zIndex: 100
-        }}>
+        // ANCORADO NA COLUNA LATERAL, não em tela cheia.
+        //
+        // Era `position:fixed; inset:0` com backdrop escuro e blur: durante a
+        // chamada o chat sumia inteiro. Isso quebra o caso de uso principal —
+        // pedir por voz que ele pesquise ou abra algo e ACOMPANHAR o resultado
+        // aparecendo no chat. O painel escondia justamente o que a conversa
+        // produzia.
+        //
+        // Agora ele ocupa o espaço vazio da barra lateral, abaixo das abas, e o
+        // conteúdo continua inteiro à direita. Sem backdrop, sem blur: nada a
+        // obscurecer, porque nada está sendo coberto.
+        //
+        // O posicionamento mora em `.voice-dock` (industry.css) e não aqui
+        // porque depende do breakpoint: no desktop é a coluna de 240px; no
+        // mobile, onde essa coluna não existe, vira uma faixa acima da navegação
+        // inferior.
+        <div className="voice-dock">
           <div className="neu-flat" style={{
-            padding: 32, display: 'flex', flexDirection: 'column', 
-            alignItems: 'center', gap: 24, width: 320, background: 'var(--neu-bg)'
+            padding: 20, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 12, width: '100%', background: 'var(--neu-bg)'
           }}>
             <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--ink)' }}>
               {voiceState === 'connecting' && 'Conectando...'}
@@ -132,22 +247,14 @@ export const VoiceButton: React.FC = () => {
               {voiceState === 'speaking' && 'Jarvis Falando'}
             </h2>
             
-            <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {voiceState === 'speaking' ? (
-                <SphereOfDots />
-              ) : (
-                <div className={voiceState === 'listening' ? 'animate-pulse-ring' : ''} style={{
-                  width: 96, height: 96, borderRadius: '50%', background: 'var(--accent-glow)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: 64, height: 64, borderRadius: '50%', background: 'var(--accent-glow)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)' }} />
-                  </div>
-                </div>
-              )}
+            {/* O MESMO HUD nos três estados, mudando só o ritmo. Antes eram dois
+                desenhos diferentes (bolinhas girando ao falar, círculos
+                concêntricos ao ouvir), e a troca brusca entre eles chamava mais
+                atenção que o próprio estado. Um objeto que acelera e desacelera
+                lê como uma máquina ligada; dois objetos que se substituem leem
+                como um glitch. O rótulo acima já diz o estado por escrito. */}
+            <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <JarvisHUD falando={voiceState === 'speaking'} />
             </div>
 
             <button 

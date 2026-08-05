@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.db.engine import get_session_factory
 from apps.api.db.repository import PgConversationStore, PgGoalStore
 from packages.agents.chief import ChiefAI
+from packages.agents.profiles import VOICE_PROFILE
 from packages.agents.tools.executor import SystemToolExecutor
 from packages.llm.anthropic_provider import AnthropicProvider
 from packages.llm.base import LLMError, LLMProvider
@@ -368,23 +369,44 @@ async def get_mcp_manager():
     return _MCP_MANAGER
 
 async def get_tool_executor(session: AsyncSession) -> SystemToolExecutor:
+    import time as _time
+
+    import structlog as _structlog
+
+    _log = _structlog.get_logger(__name__)
+    _marcos: dict[str, float] = {}
+    _t = _time.perf_counter()
+
+    def _marca(nome: str) -> None:
+        nonlocal _t
+        agora = _time.perf_counter()
+        _marcos[nome] = round(agora - _t, 2)
+        _t = agora
+
     settings = get_settings()
     llm = await get_llm_provider(session)
+    _marca("llm_provider")
     history_store = get_chat_history_store()
+    _marca("history_store")
     memory_store = get_memory_vector_store()
+    _marca("memory_store")
     mcp_manager = await get_mcp_manager()
+    _marca("mcp_manager")
     embed_llm = None
     if settings.gemini_api_key:
         embed_llm = _build_gemini(settings, "")
+    _marca("embed_llm")
 
     agno_knowledge = None
     try:
         from packages.rag.agno_knowledge import get_agno_knowledge
         agno_knowledge = get_agno_knowledge()
     except Exception as exc:
-        import structlog
-        logger = structlog.get_logger(__name__)
-        logger.warning("deps.tool_executor.agno_knowledge.failed", error=str(exc))
+        _log.warning("deps.tool_executor.agno_knowledge.failed", error=str(exc))
+    _marca("agno")
+
+    if sum(_marcos.values()) > 0.5:
+        _log.warning("perf.tool_executor", **_marcos)
 
     return SystemToolExecutor(
         tavily_api_key=settings.tavily_api_key,
@@ -448,5 +470,58 @@ Se o usuário ajustar os filtros de uma imagem no frontend e pedir para salvá-l
         chat_history_store=get_chat_history_store(),
         memory_vector_store=get_memory_vector_store(),
         embed_llm=embed_llm,
+        agno_knowledge=agno_knowledge,
+    )
+
+
+async def get_voice_ai(session: AsyncSession) -> ChiefAI:
+    """O mesmo agente do chat, sob o perfil `voice`.
+
+    Mesmas tools, mesma memória, mesmo histórico e mesmo banco que
+    `get_chief_ai` — o Jarvis é um só. O que muda é o PROMPT, e a diferença não é
+    cosmética: até esta versão o roteador de voz montava a própria lista de
+    mensagens e chamava o LM Studio **sem passar tools nenhuma**, então a
+    conversa falada não tinha `web_search`, nem `search_memory`, nem MCP, nem
+    histórico. Era um assistente separado que se apresentava como Jarvis.
+
+    **Por que não reusar `get_chief_ai` com outro prompt.** Aquela função injeta
+    `visual_instructions` — HTML, tabelas, markdown de imagem — direto no
+    `system_prompt`. Num canal que vai para um sintetizador de voz, isso é lido
+    em voz alta como pontuação solta. O perfil `voice` carrega `voice.md`, que
+    proíbe markdown e pede frases curtas (que também é o que faz a síntese por
+    frase render).
+
+    `system_prompt` fica `None` de propósito: é o que deixa o `ChiefAI` carregar
+    o prompt do perfil em vez de o do banco, que é escrito para o chat de texto.
+    """
+    llm = await get_llm_provider(session)
+    tools = await get_tool_executor(session)
+
+    settings = get_settings()
+    embed_llm = None
+    if settings.gemini_api_key:
+        embed_llm = _build_gemini(settings, "")
+
+    agno_knowledge = None
+    try:
+        from packages.rag.agno_knowledge import get_agno_knowledge
+
+        agno_knowledge = get_agno_knowledge()
+    except Exception as exc:
+        import structlog
+
+        structlog.get_logger(__name__).warning(
+            "deps.voice_ai.agno_knowledge.failed", error=str(exc)
+        )
+
+    return ChiefAI(
+        llm=llm,
+        tools=tools,
+        conversation_store=PgConversationStore(session),
+        system_prompt=None,
+        chat_history_store=get_chat_history_store(),
+        memory_vector_store=get_memory_vector_store(),
+        embed_llm=embed_llm,
+        profile=VOICE_PROFILE,
         agno_knowledge=agno_knowledge,
     )

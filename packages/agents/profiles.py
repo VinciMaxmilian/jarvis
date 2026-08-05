@@ -204,6 +204,32 @@ REVIEWER_PROFILE: Final = AgentProfile(
 )
 
 
+#: O `chief` numa chamada de voz.
+#:
+#: Existe como perfil próprio, e não como `chief` com outro prompt no banco, por
+#: uma razão concreta: o prompt do `chief` PEDE markdown e HTML ("respostas
+#: visualmente atrativas", tabelas, botões — ver `apps/api/deps.get_chief_ai`), e
+#: markdown lido por um sintetizador de voz vira "asterisco asterisco". São dois
+#: canais com exigências opostas sobre a mesma resposta, e é exatamente o tipo de
+#: divergência que a camada de perfis existe para separar.
+#:
+#: `allow_unlisted=True` como o `chief`: a voz precisa do catálogo inteiro,
+#: incluindo as tools de MCP que nascem em runtime. Restringir aqui deixaria o
+#: Jarvis falado mais burro que o escrito, que é o problema que este perfil vem
+#: consertar — até esta versão o caminho de voz não passava tools NENHUMA.
+#:
+#: `temperature=0.6`: um pouco abaixo do default conversacional. Fala não tem
+#: revisão — o dono não relê, ele ouve uma vez — então divagação custa mais caro
+#: aqui do que no texto.
+VOICE_PROFILE: Final = AgentProfile(
+    name="voice",
+    description="O Jarvis numa chamada de voz. Sem markdown, frases curtas.",
+    prompt_file="voice.md",
+    task_profile="chief",
+    temperature=0.6,
+    tools=ToolPolicy(allow_unlisted=True),
+)
+
 AGENT_PROFILES: Final[Mapping[str, AgentProfile]] = {
     p.name: p
     for p in (
@@ -212,6 +238,7 @@ AGENT_PROFILES: Final[Mapping[str, AgentProfile]] = {
         RESEARCHER_PROFILE,
         EXECUTOR_PROFILE,
         REVIEWER_PROFILE,
+        VOICE_PROFILE,
     )
 }
 

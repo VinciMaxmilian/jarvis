@@ -1,6 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NeuralMap } from '../components/NeuralMap/NeuralMap'
 import { getApiBase } from '../config'
+
+/* De quanto em quanto tempo perguntar se a memória mudou. 4s é rápido o
+ * bastante para o grafo acompanhar uma conversa (um `knowledge_save` aparece
+ * antes de o dono terminar de ler a resposta) e devagar o bastante para não
+ * pesar: a resposta são dois campos, e o handler não monta o grafo. */
+const INTERVALO_MS = 4000
 
 export default function MemoryPage() {
   const apiBase = getApiBase()
@@ -8,6 +14,57 @@ export default function MemoryPage() {
   /* loadGraph() memoiza por URL, e o NeuralMap só recria o Engine quando a URL
    * muda — o contador é o que força um refetch depois de reindexar. */
   const [versao, setVersao] = useState(0)
+
+  /* --------------------------------------------------------------------- *
+   * Recarrega sozinho quando o agente grava ou vetoriza algo.
+   *
+   * Antes, o grafo só mudava se o dono clicasse em atualizar: gravar um fato
+   * pelo chat não movia nada aqui, e a aba mostrava um retrato antigo sem
+   * dizer que era antigo. Agora um endpoint barato (/api/memory/version)
+   * devolve contagem + updated_at mais recente, e só quando essa assinatura
+   * muda é que o `versao` sobe e o NeuralMap refaz o grafo caro.
+   *
+   * Pausa com a aba em segundo plano: o dono não está vendo, e um polling que
+   * roda com a janela minimizada é bateria e CPU gastas para ninguém.
+   * --------------------------------------------------------------------- */
+  const assinaturaRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+
+    const checar = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const res = await fetch(`${apiBase}/api/memory/version`)
+        if (!res.ok || !vivo) return
+        const { count, hash } = await res.json()
+        const assinatura = `${count}:${hash}`
+        /* A primeira leitura só registra a linha de base — subir `versao` aqui
+         * refaria o grafo que acabou de ser montado, à toa. */
+        if (assinaturaRef.current === null) {
+          assinaturaRef.current = assinatura
+          return
+        }
+        if (assinaturaRef.current !== assinatura) {
+          assinaturaRef.current = assinatura
+          setVersao(v => v + 1)
+        }
+      } catch {
+        /* Rede caiu ou API reiniciando: o próximo tique tenta de novo. Sem
+         * ruído no console — isto roda a cada 4s e um erro por tique viraria
+         * spam que esconde erro de verdade. */
+      }
+    }
+
+    checar()
+    const id = window.setInterval(checar, INTERVALO_MS)
+    document.addEventListener('visibilitychange', checar)
+    return () => {
+      vivo = false
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', checar)
+    }
+  }, [apiBase])
 
   const handleUpdate = async () => {
     setUpdating(true)

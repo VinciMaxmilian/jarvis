@@ -27,6 +27,7 @@ Este módulo roda sob `mypy --strict`.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Final, NoReturn
@@ -212,15 +213,46 @@ def _to_gemini_contents(
     return contents
 
 
+_DATA_URL_RE: Final = re.compile(r"^data:(?P<mime>[\w.+-]+/[\w.+-]+)?;base64,", re.I)
+
+
+def _split_data_url(raw: str, fallback_mime: str) -> tuple[str, str]:
+    """`data:image/jpeg;base64,XXXX` → `("image/jpeg", "XXXX")`.
+
+    Base64 puro passa intacto, com `fallback_mime`.
+
+    Por que tolerar as duas formas em vez de exigir só a de contrato: o que chega
+    do `<input type="file">` do PWA é `FileReader.readAsDataURL`, ou seja, SEMPRE
+    o data URL completo. Passando ele direto, o Google devolvia
+
+        HTTP 400 — Invalid value at 'contents[N].parts[1].inline_data.data'
+        (TYPE_BYTES), Base64 decoding failed for "data:image/jpeg;base64,/9j/…"
+
+    porque `inlineData.data` aceita só o payload. E a correção óbvia — cortar o
+    prefixo em quem chama — perderia a única informação confiável de mime que
+    existe no caminho: `_to_gemini_contents` tem `image_mime_type="image/png"`
+    fixo, então um JPEG viajaria anunciado como PNG. O prefixo é a resposta para
+    os dois problemas, e por isso ele é consumido aqui, onde o mime é usado.
+    """
+    match = _DATA_URL_RE.match(raw)
+    if not match:
+        return fallback_mime, raw
+    return match.group("mime") or fallback_mime, raw[match.end():]
+
+
 def _attach_images(
     contents: list[dict[str, Any]], images: list[str], mime_type: str
 ) -> None:
     """Anexa `inlineData` ao último turno de `user` — mesma regra do
     `OllamaProvider`, onde a imagem pertence ao turno que pergunta sobre ela.
+
+    Aceita base64 puro (o contrato) e data URL (o que o PWA manda de fato) — ver
+    `_split_data_url`.
     """
-    image_parts = [
-        {"inlineData": {"mimeType": mime_type, "data": data}} for data in images
-    ]
+    image_parts = []
+    for raw in images:
+        mime, data = _split_data_url(raw, mime_type)
+        image_parts.append({"inlineData": {"mimeType": mime, "data": data}})
     for entry in reversed(contents):
         if entry.get("role") == "user":
             existing = entry.get("parts")
