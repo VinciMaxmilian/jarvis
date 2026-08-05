@@ -21,6 +21,7 @@ estática — ver a última seção.
 from __future__ import annotations
 
 import ast
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Final
@@ -44,6 +45,11 @@ from tests.conftest import (
     RecordingToolExecutor,
     make_tool_spec,
 )
+
+
+async def _nada() -> None:
+    """`close` dos dublês de servidor, que aqui não tem o que fechar."""
+
 
 _PNG_FALSO: Final = "iVBORw0KGgoAAAANSUhEUg=="
 _RAIZ: Final = Path(__file__).resolve().parents[2]
@@ -477,3 +483,142 @@ async def test_captura_base64_sobrevive_ao_filtro_de_url() -> None:
     await _rodar(chief)
 
     assert llm.imagens_por_rodada[1] == ["iVBORw0KGgoAAAA"]
+
+
+# --------------------------------------------------------------------------- #
+# 6. Reconexão: o servidor do outro lado reinicia, e a API não pode morrer junto
+# --------------------------------------------------------------------------- #
+
+
+class _SessaoQueMorre:
+    """Sessão que falha as primeiras N chamadas, como um SSE que caiu.
+
+    `RemoteProtocolError` do httpx chega com mensagem VAZIA — é reproduzido aqui
+    de propósito, porque foi essa mensagem vazia que fez a queda da conexão
+    aparecer no log como `error=` e passar despercebida.
+    """
+
+    def __init__(self, falhas: int = 1) -> None:
+        self.falhas = falhas
+        self.chamadas = 0
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        self.chamadas += 1
+        if self.falhas > 0:
+            self.falhas -= 1
+            raise RuntimeError("")  # str(exc) vazio, como o erro real
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="ok")], isError=False
+        )
+
+    async def list_tools(self) -> Any:
+        return SimpleNamespace(
+            tools=[
+                SimpleNamespace(
+                    name="desktop_capturar_tela", description="", inputSchema={}
+                )
+            ]
+        )
+
+
+async def test_sessao_morta_reconecta_e_a_chamada_passa() -> None:
+    """O modo de falha real: o dono reinicia o MCP do host e, até esta correção,
+    TODA tool daquele servidor falhava para sempre — a API guardava a sessão
+    morta e nunca trocava."""
+    gerente = MCPClientManager(Path("nao_existe"))
+    gerente.servers["host"] = SimpleNamespace(  # type: ignore[assignment]
+        session=_SessaoQueMorre(falhas=1), params="http://host/sse", close=_nada
+    )
+    gerente.tool_routes["desktop_capturar_tela"] = "host"
+
+    viva = _SessaoQueMorre(falhas=0)
+
+    async def _reconectar_falso(nome: str) -> bool:
+        gerente.servers[nome] = SimpleNamespace(  # type: ignore[assignment]
+            session=viva, params="http://host/sse", close=_nada
+        )
+        return True
+
+    gerente.reconectar = _reconectar_falso  # type: ignore[method-assign]
+
+    resultado = await gerente.call_tool("desktop_capturar_tela", {})
+
+    assert resultado == {"result": "ok"}
+    assert viva.chamadas == 1, "a chamada tem de ser refeita na sessão nova"
+
+
+async def test_servidor_que_nao_volta_devolve_erro_util() -> None:
+    """Sem isto o modelo recebia erro vazio e passava a inventar nome de tool —
+    foi o que aconteceu: ele chamou `desktop_clicar_coordenada`, que não existe."""
+    gerente = MCPClientManager(Path("nao_existe"))
+    gerente.servers["host"] = SimpleNamespace(  # type: ignore[assignment]
+        session=_SessaoQueMorre(falhas=99), params="http://host/sse", close=_nada
+    )
+    gerente.tool_routes["desktop_capturar_tela"] = "host"
+
+    async def _nunca_volta(nome: str) -> bool:
+        return False
+
+    gerente.reconectar = _nunca_volta  # type: ignore[method-assign]
+
+    resultado = await gerente.call_tool("desktop_capturar_tela", {})
+
+    assert "error" in resultado
+    assert "run_desktop_host" in resultado["error"], "o erro tem de dizer o que fazer"
+    assert (
+        "RuntimeError" in resultado["error"]
+    ), "erro sem mensagem não pode virar texto vazio"
+
+
+async def test_servidor_fora_do_ar_no_boot_entra_depois() -> None:
+    """O buraco que a reconexão sozinha não cobria.
+
+    `reconectar` só sabe recriar servidor que JÁ está em `self.servers`. Quando o
+    MCP do host estava fora do ar no boot da API, ele nunca era registrado — e
+    subir o host depois não adiantava nada, porque a descoberta roda uma vez só.
+    O dono ficava sem as tools de desktop até reiniciar o container, e o modelo
+    respondia que não tinha ferramenta para aquilo.
+    """
+    gerente = MCPClientManager(Path("nao_existe"))
+    gerente._pendentes["Jarvis-Windows-Host"] = "http://host/sse"
+    gerente._proxima_tentativa = 0.0
+
+    async def _agora_sobe() -> None:
+        gerente._pendentes.pop("Jarvis-Windows-Host", None)
+        gerente.servers["Jarvis-Windows-Host"] = SimpleNamespace(  # type: ignore[assignment]
+            session=_SessaoQueMorre(falhas=0), params="http://host/sse", close=_nada
+        )
+        gerente.tool_routes["desktop_capturar_tela"] = "Jarvis-Windows-Host"
+
+    gerente.tentar_pendentes = _agora_sobe  # type: ignore[method-assign]
+
+    specs = await gerente.get_tools_specs()
+
+    assert [s["name"] for s in specs] == ["desktop_capturar_tela"]
+
+
+async def test_pendente_respeita_o_intervalo() -> None:
+    """Sem intervalo, um host permanentemente fora do ar custaria uma tentativa
+    de conexão — com timeout — em TODA mensagem da conversa."""
+    gerente = MCPClientManager(Path("nao_existe"))
+    gerente._pendentes["host"] = "http://host/sse"
+    gerente._proxima_tentativa = time.monotonic() + 3600  # ainda não é hora
+
+    tentou = False
+
+    class _Instancia:
+        def __init__(self, *a: Any, **k: Any) -> None:
+            nonlocal tentou
+            tentou = True
+
+    import packages.mcp.client_manager as mod
+
+    original = mod.MCPServerInstance
+    mod.MCPServerInstance = _Instancia  # type: ignore[misc]
+    try:
+        await gerente.tentar_pendentes()
+    finally:
+        mod.MCPServerInstance = original  # type: ignore[misc]
+
+    assert not tentou, "não pode tentar antes da hora"
+    assert "host" in gerente._pendentes

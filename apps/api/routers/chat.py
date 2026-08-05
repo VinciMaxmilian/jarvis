@@ -30,6 +30,17 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
+def _texto_do_erro(exc: BaseException) -> str:
+    """Exceção → mensagem que serve num log e na tela do dono.
+
+    `str()` de `WebSocketDisconnect` e de boa parte dos erros de transporte é
+    VAZIO: o log saía `error=` e o balão de erro do PWA vinha em branco. O nome
+    da classe sempre existe e já diz de que família é a falha.
+    """
+    texto = str(exc).strip()
+    return f"{type(exc).__name__}: {texto}" if texto else type(exc).__name__
+
+
 class ChatRequest(BaseModel):
     message: str
     conversation_id: UUID | None = None
@@ -174,21 +185,40 @@ async def chat_ws(websocket: WebSocket) -> None:
                         await websocket.send_text(json.dumps(payload, default=str))
 
                     await session.commit()
+                except WebSocketDisconnect:
+                    # O navegador foi embora no meio do turno (aba fechada,
+                    # recarregada, rede caiu). NÃO é falha do agente, e tentar
+                    # responder num socket morto — que é o que o `except`
+                    # genérico abaixo fazia — levanta uma SEGUNDA exceção que
+                    # enterra a primeira. Sai como aviso, sem traceback.
+                    await session.rollback()
+                    logger.warning("chat.ws.cliente_desconectou", conv_id=str(conv_id))
+                    return
                 except Exception as exc:
                     await session.rollback()
                     # exc_info=True é o ponto todo: `str(exc)` de um
                     # ExceptionGroup rende "unhandled errors in a TaskGroup
                     # (1 sub-exception)", que é o mesmo texto inútil que o
                     # loader de MCP já produz. O traceback traz a sub-exceção.
+                    #
+                    # `_texto_do_erro` e não `str(exc)`: várias exceções de
+                    # transporte (WebSocketDisconnect, RemoteProtocolError) têm
+                    # `str()` VAZIO, e o log saía `error=` — um erro sem
+                    # mensagem nenhuma, que foi o que escondeu a queda do
+                    # WebSocket por dois testes seguidos.
+                    detalhe = _texto_do_erro(exc)
                     logger.error(
                         "chat.ws.failed",
                         conv_id=str(conv_id),
-                        error=str(exc),
+                        error=detalhe,
                         exc_info=True,
                     )
-                    await websocket.send_text(
-                        json.dumps({"type": "error", "error": str(exc)})
-                    )
+                    # Avisar o dono é melhor esforço: se o socket já morreu, a
+                    # tentativa falha e não há mais nada a fazer por este turno.
+                    with contextlib.suppress(Exception):
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "error": detalhe})
+                        )
 
     except WebSocketDisconnect:
         pass

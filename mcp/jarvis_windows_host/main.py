@@ -431,6 +431,31 @@ def _exigir_sessao(acao: str) -> dict[str, Any] | None:
     return None
 
 
+def _janela_minimizada(handle: int) -> bool:
+    """`True` se a janela está minimizada. `handle=0` (foreground) nunca está."""
+    if not handle or _win32gui is None:
+        return False
+    try:
+        return bool(_win32gui.IsIconic(handle))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _para_tela(x: int, y: int, espaco: str) -> tuple[int, int]:
+    """Coordenada do modelo → pixel real do monitor.
+
+    Existe uma vez só porque três tools (`clicar`, `arrastar`, `rolar`) recebem
+    ponto do modelo, e uma delas esquecer a conversão é um bug que só aparece
+    numa tela de resolução diferente da de quem testou.
+    """
+    if espaco == "tela" or not _ULTIMA_ESCALA:
+        return int(x), int(y)
+    return (
+        int(x / _ULTIMA_ESCALA) + _ULTIMO_OFFSET[0],
+        int(y / _ULTIMA_ESCALA) + _ULTIMO_OFFSET[1],
+    )
+
+
 @contextlib.contextmanager
 def _com_na_thread() -> Any:
     """Garante `CoInitialize` na thread que está atendendo esta chamada.
@@ -580,7 +605,7 @@ def _coletar_elementos_raw(
                 "tipo": tipo.replace("Control", ""),
                 "automation_id": auto_id[:60],
                 "rect": [r.left, r.top, r.right, r.bottom],
-                "centro": [r.left + larg // 2, r.top + alt // 2],
+                "centro_tela": [r.left + larg // 2, r.top + alt // 2],
                 "habilitado": bool(controle.IsEnabled),
             }
             achados.append(item)
@@ -805,7 +830,7 @@ def desktop_inspecionar(
     except Exception as exc:  # noqa: BLE001
         return _erro(f"falha ao ler a árvore de UI: {exc}")
 
-    return {
+    resposta: dict[str, Any] = {
         "ok": True,
         "janela": titulo,
         "total": len(elementos),
@@ -813,11 +838,54 @@ def desktop_inspecionar(
         "dica": "clique por id (desktop_clicar_elemento), não por coordenada.",
     }
 
+    # App Electron/WebView2 (Teams, Discord, VS Code, Slack) não expõe a árvore
+    # interna para a UI Automation: o conteúdo inteiro chega como UM nó
+    # `Document` sem nome, e o resto é a moldura da janela. Sem este aviso a
+    # resposta parece uma inspeção bem-sucedida de uma tela quase vazia, e o
+    # modelo conclui que os controles não existem — foi o que aconteceu com o
+    # Teams, onde ele desistiu dos ids e passou a chutar pixel.
+    #
+    # O limiar é 6 e não 3 porque a moldura sozinha já rende 4 nós no Teams
+    # (a aba, "Fechar guia", "Nova Guia" e o menu "Sistema") — medido. E o
+    # `total == 0` entra junto: o Discord devolveu ZERO elementos, que é o caso
+    # mais cego de todos e não tinha nem `Document` para casar na condição
+    # anterior. Uma janela de aplicativo de verdade rende dezenas de nós; menos
+    # que isso quer dizer que não estamos vendo o conteúdo, não que ele é vazio.
+    _moldura = {"Document", "Pane", "Window"}
+    interativos = [e for e in elementos if e["tipo"] not in _moldura]
+    if len(interativos) <= 6:
+        # Duas causas diferentes produzem a mesma lista curta, e a ação correta
+        # para cada uma é oposta. Janela minimizada precisa ser trazida à frente
+        # (screenshot dela não existe); janela cega precisa de screenshot (focar
+        # não revela nada). Um aviso único mandaria o modelo para o lado errado
+        # em metade dos casos.
+        if _janela_minimizada(handle):
+            resposta["aviso"] = (
+                "esta janela está MINIMIZADA — por isso a lista veio vazia. Ela "
+                "não está vazia de verdade. Chame desktop_focar_janela com este "
+                "handle e inspecione de novo."
+            )
+            resposta["dica"] = "desktop_focar_janela primeiro, depois inspecione."
+        else:
+            resposta["aviso"] = (
+                "esta janela NÃO expõe seus controles para a acessibilidade "
+                "(típico de Electron/WebView2 — Teams, Discord, Slack, VS Code, "
+                "Cursor). O que veio acima é só a moldura, não o conteúdo. Não "
+                "conclua que a tela está vazia."
+            )
+            resposta["dica"] = (
+                "aqui o caminho é desktop_capturar_tela e depois desktop_clicar "
+                "com as coordenadas lidas NA IMAGEM — espaco='captura', que já é "
+                "o padrão. Não converta nada você mesmo."
+            )
+    return resposta
+
 
 def desktop_capturar_tela(
     monitor: int = 0,
     marcar_elementos: bool = False,
     regiao: list[int] | None = None,
+    janela: int = 0,
 ) -> Any:
     """Tira um screenshot e devolve a imagem para você olhar.
 
@@ -825,21 +893,47 @@ def desktop_capturar_tela(
     canvas, jogo, app sem acessibilidade) ou quando precisar CONFERIR o efeito
     de uma ação. Para decidir onde clicar, prefira desktop_inspecionar.
 
-    monitor: 0 (padrão) = a tela onde está a janela em foco — é o que você quer
-        quase sempre. 1, 2... = uma tela específica. -1 = todas juntas, mas
-        cuidado: com dois monitores a imagem final fica larga e baixa demais
-        para ler texto de interface.
+    ATENÇÃO À ESCALA. A imagem é REDUZIDA antes de chegar até você, e a resposta
+    diz quanto (`escala`). Com `escala` 0.5, cada linha de uma lista tem uns 20
+    pixels na sua imagem e o texto fica no limite do ilegível — é assim que se
+    clica na conversa errada. Se precisar LER algo para escolher, capture de
+    novo com `janela` ou `regiao`: área menor significa menos redução, e abaixo de
+    1280px de largura não há redução nenhuma.
+
+    monitor: 0 (padrão) = a tela onde está a janela em foco. 1, 2... = uma tela
+        específica. -1 = todas juntas, mas aí a redução é a pior possível.
+    janela: handle de desktop_listar_janelas. Captura só aquela janela, com
+        menos redução que a tela inteira. Prefira isto ao capturar um app.
+    regiao: [x, y, largura, altura] em pixels REAIS. É o recorte mais preciso —
+        use para ler texto pequeno, como o nome de um item numa lista.
     marcar_elementos: desenha caixas numeradas (e1, e2...) sobre os controles
         detectados — depois é só chamar desktop_clicar_elemento com o número.
-    regiao: [x, y, largura, altura] em pixels reais, para recortar. Recortar a
-        área de interesse é o melhor jeito de enxergar texto pequeno.
     """
+    if janela and not regiao and _win32gui is not None:
+        try:
+            esq, topo, dir_, baixo = _win32gui.GetWindowRect(janela)
+            regiao = [esq, topo, dir_ - esq, baixo - topo]
+        except Exception as exc:  # noqa: BLE001
+            return _erro(f"handle de janela inválido: {exc}")
+
     try:
         png, meta = _capturar_png(monitor, regiao)
     except Exception as exc:  # noqa: BLE001
         return _erro(str(exc))
 
     corpo: dict[str, Any] = {"ok": True, **meta}
+    # O aviso é acionado pela ESCALA e não pelo tamanho da tela, porque é a
+    # escala que define se o texto sobreviveu. Sem ele o modelo não tem como
+    # saber que está olhando uma imagem degradada — ela parece nítida para quem
+    # não viu o original — e escolhe a linha errada com total confiança.
+    if meta["escala"] < 0.7:
+        corpo["aviso_legibilidade"] = (
+            f"esta imagem foi reduzida a {int(meta['escala'] * 100)}% do tamanho "
+            "real. Texto pequeno (nome em lista, item de menu) pode estar "
+            "ilegível. Se você precisa LER algo para decidir onde clicar, chame "
+            "de novo com `janela=<handle>` ou `regiao=[x, y, largura, altura]` "
+            "antes de clicar — não chute a linha."
+        )
     if marcar_elementos and _uia is not None:
         try:
             elementos = _coletar_elementos(None, 12, True)
@@ -849,7 +943,11 @@ def desktop_capturar_tela(
         except Exception as exc:  # noqa: BLE001
             corpo["aviso_marcacao"] = str(exc)
 
-    _registrar_auditoria("capturar_tela", {"monitor": monitor}, png)
+    _registrar_auditoria(
+        "capturar_tela",
+        {"monitor": monitor, "janela": janela, "escala": meta["escala"]},
+        png,
+    )
 
     if bloco := _imagem_mcp(png):
         return [corpo, bloco]
@@ -1086,7 +1184,7 @@ def desktop_clicar_elemento(
     if bloqueio := _exigir_sessao("clicar_elemento"):
         return bloqueio
 
-    x, y = elemento["centro"]
+    x, y = elemento["centro_tela"]
     try:
         _pyautogui.click(x=x, y=y, button=botao, clicks=2 if duplo else 1, interval=0.1)
     except Exception as exc:  # noqa: BLE001
@@ -1104,25 +1202,37 @@ def desktop_clicar(
     y: int,
     botao: str = "left",
     duplo: bool = False,
-    espaco: str = "tela",
+    espaco: str = "captura",
     conferir: bool = True,
 ) -> Any:
-    """Clica numa coordenada. FALLBACK — prefira desktop_clicar_elemento.
+    """Clica numa coordenada MEDIDA NA IMAGEM que você recebeu. FALLBACK.
 
-    Use só quando o alvo não aparece em desktop_inspecionar (canvas, jogo,
-    conteúdo sem acessibilidade).
+    Prefira desktop_clicar_elemento. Use isto só quando o alvo não aparecer em
+    desktop_inspecionar — app Electron/WebView2 (Teams, Discord, VS Code),
+    canvas, jogo.
 
-    espaco: "tela" = pixels reais do monitor (padrão).
-            "captura" = coordenadas medidas na última imagem que você recebeu;
-            a conversão para pixel real é feita aqui, não por você.
+    espaco: "captura" (padrão) = as coordenadas que você leu na última imagem.
+            A captura é REDUZIDA antes de chegar até você, e a conversão de
+            volta para pixel real é feita aqui — você não faz conta nenhuma.
+            "tela" = pixel real do monitor. Use SOMENTE com o valor de
+            `centro_tela` que desktop_inspecionar devolveu.
     """
     if bloqueio := _exigir_sessao("clicar"):
         return bloqueio
 
+    # O default é "captura", e não "tela", porque o modelo não tem como medir em
+    # pixel real: a única coisa que ele enxerga é a imagem reduzida (2560x1080
+    # chega como 1280x540). Com "tela" no default, TODO clique caía na metade da
+    # distância, puxado para o canto superior esquerdo — observado com o Teams,
+    # onde o alvo era a lista de conversas e o clique acertou a barra lateral.
+    # Um default que só funciona quando quem chama sabe de um detalhe que ele não
+    # pode observar é uma armadilha, não um default.
     real_x, real_y = int(x), int(y)
-    if espaco == "captura" and _ULTIMA_ESCALA:
+    convertido = False
+    if espaco != "tela" and _ULTIMA_ESCALA:
         real_x = int(x / _ULTIMA_ESCALA) + _ULTIMO_OFFSET[0]
         real_y = int(y / _ULTIMA_ESCALA) + _ULTIMO_OFFSET[1]
+        convertido = True
 
     try:
         _pyautogui.click(
@@ -1131,8 +1241,20 @@ def desktop_clicar(
     except Exception as exc:  # noqa: BLE001
         return _erro(f"falha no clique: {exc}")
 
+    # A conversão vai para a auditoria: sem ela, uma linha `{"x": 115}` não diz
+    # se 115 era o que o modelo pediu ou o que de fato foi clicado, e foi
+    # exatamente essa ambiguidade que atrasou o diagnóstico deste bug.
     return _conferencia(
-        "clicar", {"x": real_x, "y": real_y, "espaco": espaco, "botao": botao}, conferir
+        "clicar",
+        {
+            "x": real_x,
+            "y": real_y,
+            "pedido": [int(x), int(y)],
+            "espaco": espaco,
+            "escala_aplicada": round(1 / _ULTIMA_ESCALA, 3) if convertido else 1,
+            "botao": botao,
+        },
+        conferir,
     )
 
 
@@ -1158,7 +1280,7 @@ def desktop_preencher_campo(id: str, texto: str, conferir: bool = True) -> Any:
 
     try:
         with _com_na_thread():
-            x, y = elemento["centro"]
+            x, y = elemento["centro_tela"]
             controle = _uia.ControlFromPoint(x, y)
             if controle is None:
                 return _erro("não encontrei o controle nessa posição; a tela mudou?")
@@ -1248,37 +1370,58 @@ def desktop_teclas(teclas: list[str], conferir: bool = True) -> Any:
 
 
 def desktop_rolar(
-    quantidade: int = -3, x: int = 0, y: int = 0, conferir: bool = True
+    quantidade: int = -3,
+    x: int = 0,
+    y: int = 0,
+    espaco: str = "captura",
+    conferir: bool = True,
 ) -> Any:
     """Rola a tela. Negativo desce, positivo sobe.
 
-    x, y: onde posicionar o mouse antes de rolar (0,0 = onde já está).
+    x, y: onde posicionar o mouse antes de rolar, medido na imagem que você
+        recebeu (0,0 = deixa o mouse onde está). Rolar exige o ponteiro DENTRO
+        da área que se quer rolar — a lista de conversas não rola se o mouse
+        estiver sobre o painel do lado.
     """
     if bloqueio := _exigir_sessao("rolar"):
         return bloqueio
+    alvo = _para_tela(x, y, espaco) if (x or y) else None
     try:
-        if x or y:
-            _pyautogui.moveTo(int(x), int(y))
+        if alvo:
+            _pyautogui.moveTo(*alvo)
         _pyautogui.scroll(int(quantidade) * 120)
     except Exception as exc:  # noqa: BLE001
         return _erro(f"falha ao rolar: {exc}")
-    return _conferencia("rolar", {"quantidade": quantidade}, conferir)
+    return _conferencia(
+        "rolar", {"quantidade": quantidade, "ponteiro": list(alvo) if alvo else "atual"},
+        conferir,
+    )
 
 
 def desktop_arrastar(
-    de_x: int, de_y: int, para_x: int, para_y: int, conferir: bool = True
+    de_x: int,
+    de_y: int,
+    para_x: int,
+    para_y: int,
+    espaco: str = "captura",
+    conferir: bool = True,
 ) -> Any:
     """Arrasta de um ponto a outro com o botão esquerdo pressionado.
 
-    Para mover arquivo, redimensionar janela ou ajustar um slider.
+    Para mover arquivo, redimensionar janela ou ajustar um slider. As
+    coordenadas são as que você leu na imagem recebida.
     """
     if bloqueio := _exigir_sessao("arrastar"):
         return bloqueio
+    origem = _para_tela(de_x, de_y, espaco)
+    destino = _para_tela(para_x, para_y, espaco)
     try:
-        _pyautogui.moveTo(int(de_x), int(de_y))
-        _pyautogui.dragTo(int(para_x), int(para_y), duration=0.4, button="left")
+        _pyautogui.moveTo(*origem)
+        _pyautogui.dragTo(*destino, duration=0.4, button="left")
     except Exception as exc:  # noqa: BLE001
         return _erro(f"falha ao arrastar: {exc}")
     return _conferencia(
-        "arrastar", {"de": [de_x, de_y], "para": [para_x, para_y]}, conferir
+        "arrastar",
+        {"de": list(origem), "para": list(destino), "espaco": espaco},
+        conferir,
     )
