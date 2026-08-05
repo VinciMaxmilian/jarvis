@@ -406,11 +406,25 @@ class ChiefAI:
                     # de duas formas: o modelo receberia base64 como se fosse
                     # prosa, e um único screenshot (~200 KB em base64) empurraria
                     # o histórico inteiro para fora da janela de contexto.
-                    novas = result.pop("images", None) if isinstance(result, dict) else None
+                    novas = (
+                        result.pop("images_b64", None)
+                        if isinstance(result, dict)
+                        else None
+                    )
                     if isinstance(novas, list) and novas:
-                        capturas.extend(str(i) for i in novas)
+                        # Filtra URL por segurança: o canal multimodal do provider
+                        # espera BYTES em base64, e uma URL que escape para lá vira
+                        # HTTP 400 no meio do turno, não um aviso.
+                        novas = [
+                            str(i) for i in novas if not str(i).startswith(("http://", "https://"))
+                        ]
+                    if novas:
+                        capturas.extend(novas)
                         del capturas[:-_TETO_IMAGENS]
-                        result["images"] = (
+                        # `capturas`, não `images`: `web_search` já usa `images`
+                        # para as URLs que ele achou, e sobrescrever aquilo com
+                        # esta nota apagaria o resultado da busca.
+                        result["capturas"] = (
                             f"{len(novas)} captura(s) anexada(s) como imagem nesta "
                             "conversa — olhe a imagem, ela é o estado atual da tela."
                         )

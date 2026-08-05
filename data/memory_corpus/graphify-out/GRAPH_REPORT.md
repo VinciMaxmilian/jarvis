@@ -1,17 +1,40 @@
-# Graph Report - memory_corpus  (2026-08-04)
+# Graph Report - memory_corpus  (2026-08-05)
 
 ## Corpus Check
-- 35 files · ~814 words
+- 58 files · ~1,327 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 105 nodes · 70 edges · 35 communities (0 shown, 35 thin omitted)
+- 174 nodes · 116 edges · 58 communities (0 shown, 58 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
 - Memória: knowledge
 - Memória: knowledge
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
+- Memória: chat_history
 - Memória: chat_history
 - Memória: chat_history
 - Memória: chat_history
@@ -61,15 +84,15 @@
 ## Surprising Connections (you probably didn't know these)
 - None detected - all connections are within the same source files.
 
-## Communities (35 total, 35 thin omitted)
+## Communities (58 total, 58 thin omitted)
 
 ## Knowledge Gaps
-- **35 isolated node(s):** `Metadata`, `Metadata`, `Metadata`, `Metadata`, `Metadata` (+30 more)
+- **58 isolated node(s):** `Metadata`, `Metadata`, `Metadata`, `Metadata`, `Metadata` (+53 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **35 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What connects `Metadata`, `Metadata`, `Metadata` to the rest of the system?**
-  _35 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _58 weakly-connected nodes found - possible documentation gaps or missing edges._

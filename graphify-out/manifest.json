@@ -295,8 +295,8 @@
     "semantic_hash": ""
   },
   "packages/agents/chief.py": {
-    "mtime": 1785931745.9915195,
-    "ast_hash": "271cb6f7b0e07b67c53118d0a7c554cb",
+    "mtime": 1785947094.7306914,
+    "ast_hash": "1aae9f9b9d95e243ccaf0163b86386c5",
     "semantic_hash": ""
   },
   "packages/agents/tools/__init__.py": {
@@ -1330,8 +1330,8 @@
     "semantic_hash": ""
   },
   "packages/mcp/client_manager.py": {
-    "mtime": 1785931745.9962134,
-    "ast_hash": "5a00de52a885209d40ede25357bc71ce",
+    "mtime": 1785947070.174657,
+    "ast_hash": "67f546827f8c2c5f8ede2235b57021d1",
     "semantic_hash": ""
   },
   "packages/memory/graphify_store.py": {
@@ -1680,8 +1680,8 @@
     "semantic_hash": ""
   },
   "data/vector/chat_history_graph_index.json": {
-    "mtime": 1785872535.2057474,
-    "ast_hash": "5f48af5177c05b5b1cb0886bca232ff1",
+    "mtime": 1785946875.8733623,
+    "ast_hash": "92ce09e587882efe72a82a6d8b7a7b20",
     "semantic_hash": ""
   },
   "data/vector/memory_graph_index.json": {
@@ -2135,18 +2135,18 @@
     "semantic_hash": ""
   },
   "mcp/jarvis_windows_host/main.py": {
-    "mtime": 1785931859.8866723,
-    "ast_hash": "b617386436c91123f6e980e603fbb63e",
+    "mtime": 1785947060.2664404,
+    "ast_hash": "2f186744f39f8db4305ad0b453cec219",
     "semantic_hash": ""
   },
   "scripts/run_desktop_host.ps1": {
-    "mtime": 1785931117.1619322,
-    "ast_hash": "d73b21458009a068f5f434342130405a",
+    "mtime": 1785932857.9851599,
+    "ast_hash": "db904748ea7552c86c2ae3d4de3e4223",
     "semantic_hash": ""
   },
   "tests/unit/test_computer_use.py": {
-    "mtime": 1785931783.3088324,
-    "ast_hash": "a47410c90fffc08e40302b03682e45cc",
+    "mtime": 1785947143.57482,
+    "ast_hash": "b5d4d01cf740bbbb5061209e9898b279",
     "semantic_hash": ""
   },
   "plano_computer_use.md": {
@@ -2157,6 +2157,146 @@
   "plano_voz_config_ui.md": {
     "mtime": 1785929698.3011792,
     "ast_hash": "5b520ad1d5351754c809e3b0ef419eff",
+    "semantic_hash": ""
+  },
+  "atualizar-docker.md": {
+    "mtime": 1785947257.4250164,
+    "ast_hash": "c03d012b822404b41111a47c24d23a7c",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_06db8fcdad4b49578c961f514dc4f94e.md": {
+    "mtime": 1785938813.04213,
+    "ast_hash": "a5c2a841378c5e0fccce544ebfdf1769",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_13e7e0baa3ab4b3192d1548213c453b4.md": {
+    "mtime": 1785936544.456405,
+    "ast_hash": "fa07db580a969913c5838e9a4f02a2d8",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_25177ee7c1d74c7a9c159146f68910e4.md": {
+    "mtime": 1785938558.7795799,
+    "ast_hash": "69ec6bb24b5dc3f1c0babb00a08f490f",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_40ea88cc33934320b1ce668516a3b192.md": {
+    "mtime": 1785946798.4255447,
+    "ast_hash": "e9b01f45f5ed7bd62eff6ea05aecbba2",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_4e7f514cd55046deb296a1e9578427a9.md": {
+    "mtime": 1785946875.8845036,
+    "ast_hash": "b016de5e511c6a85dc990ea870388e01",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_501817e7f73e4e68a30684747dc5f092.md": {
+    "mtime": 1785935711.952066,
+    "ast_hash": "b06bb0bb5ec07f84075a2167c419d5f6",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_59405b18e96245ab9659fcaa2dce4180.md": {
+    "mtime": 1785940675.2906532,
+    "ast_hash": "362961b28c22749c7dec761f8178153a",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_5d1ef552f74043888c9041c1340fe277.md": {
+    "mtime": 1785933414.4600978,
+    "ast_hash": "1220f32deedf1247028af5f90d88c5f1",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_6ec4bf3e01354b58a32ba48cb072dd7e.md": {
+    "mtime": 1785939132.5902445,
+    "ast_hash": "97b03345f1c236b8b2ac4582d2af5677",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_7b81864e21154ec3b265676ea4362937.md": {
+    "mtime": 1785946816.619181,
+    "ast_hash": "2655b7895f2f43a6b6917d8fe165a930",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_97ae9b98b0f14627971c76b64fc56651.md": {
+    "mtime": 1785938628.1185503,
+    "ast_hash": "12781a9acbc5c38978fe886a20b31dad",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_a277db0e6b644fbc87bbe4ceb3981339.md": {
+    "mtime": 1785940666.7379377,
+    "ast_hash": "2f3c967a63744ffa306a86a883642938",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_a6d945a14e7445f0a3bd7b40b201ffb9.md": {
+    "mtime": 1785938686.0325673,
+    "ast_hash": "90df068a10e7a431e78e3f67aa1ebf05",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_ab85d090c3c24372a2b9a0f2bb51ba42.md": {
+    "mtime": 1785933246.6930172,
+    "ast_hash": "f528260633da13f26053c7feedc9ea32",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_ad383f26af08441ea2146ee2310ef426.md": {
+    "mtime": 1785936247.4822803,
+    "ast_hash": "7e5448c08633f07043ed585df46fca8c",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_b0366bf4a51b4d988bb92e330f934ca2.md": {
+    "mtime": 1785933167.7426403,
+    "ast_hash": "218fa2ae7bac4500f2d31c63fa6c82ae",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_b73ad11f6d6e4919b73852d8880a026d.md": {
+    "mtime": 1785937219.266688,
+    "ast_hash": "6d0268648e0c145d29cf848e59f69d2d",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_bbab736d3f5141588e73a405e10afcf3.md": {
+    "mtime": 1785933355.0164125,
+    "ast_hash": "3193e1ed2b449c270161fed8ae129eaa",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_c1b6406f96cd47cfa0ca85d5ea1d28af.md": {
+    "mtime": 1785934430.353094,
+    "ast_hash": "cd29429895431e58c35b7a20a75fa028",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_dfa08094b4a642aa8cd2e4c074ed0037.md": {
+    "mtime": 1785937520.8482056,
+    "ast_hash": "29d0cdd43d174dc26c7ae7b5abe3b7db",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_ebcee29682104847b5bbbdbe4711c2d1.md": {
+    "mtime": 1785938516.7018752,
+    "ast_hash": "dcb0591481aa84868cd2d024653cec4b",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_ec7eb484b23242079f38caa8a0501cad.md": {
+    "mtime": 1785946857.6334767,
+    "ast_hash": "a6af0fd2650fb232a85e3d6ab000892b",
+    "semantic_hash": ""
+  },
+  "data/memory_corpus/msg_fc2269f0188e4bcb872c592fb42c403b.md": {
+    "mtime": 1785940634.8347578,
+    "ast_hash": "ddb2f7c7e70da4f63a4c843ab29e42d6",
+    "semantic_hash": ""
+  },
+  "infrastructure/lmstudio/README.md": {
+    "mtime": 1785936477.8513756,
+    "ast_hash": "758d84bbef2ca7c516fcf0dde98ebac1",
+    "semantic_hash": ""
+  },
+  "plano-tele.md": {
+    "mtime": 1785946679.6866162,
+    "ast_hash": "99948da6f807c56fc8c4895b4d7638b0",
+    "semantic_hash": ""
+  },
+  "plano_mcp_externos.md": {
+    "mtime": 1785947361.6441662,
+    "ast_hash": "0133597fd10b6b8c67213cb48c1abde9",
+    "semantic_hash": ""
+  },
+  "scripts/@AutomationLog.txt": {
+    "mtime": 1785946819.28012,
+    "ast_hash": "16e78b31dcf0409742b4aabf05254cd7",
     "semantic_hash": ""
   }
 }

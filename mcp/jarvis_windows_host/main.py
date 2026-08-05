@@ -431,6 +431,34 @@ def _exigir_sessao(acao: str) -> dict[str, Any] | None:
     return None
 
 
+@contextlib.contextmanager
+def _com_na_thread() -> Any:
+    """Garante `CoInitialize` na thread que está atendendo esta chamada.
+
+    A UI Automation é COM, e COM é inicializado POR THREAD. O módulo é importado
+    uma vez, na thread principal, mas o FastMCP atende cada requisição numa
+    thread do pool — que nasce sem COM. O sintoma observado em produção foi
+    `[WinError -2147221008] CoInitialize não foi chamado` vindo de
+    `desktop_inspecionar`, enquanto os mesmos comandos rodavam sem erro num
+    script de teste (thread única, COM inicializado no import).
+
+    `UIAutomationInitializerInThread` é da própria lib e faz init/uninit em par.
+    O fallback direto no `comtypes` existe porque a alternativa — falhar aqui —
+    devolveria de novo o erro que este bloco veio consertar.
+    """
+    if _uia is not None and hasattr(_uia, "UIAutomationInitializerInThread"):
+        with _uia.UIAutomationInitializerInThread(debug=False):
+            yield
+        return
+    try:
+        import comtypes
+
+        comtypes.CoInitialize()
+    except Exception:  # noqa: BLE001 — thread que já tem COM levanta aqui
+        pass
+    yield
+
+
 def _escolher_area(sct: Any, monitor: int) -> dict[str, int]:
     """Qual retângulo capturar.
 
@@ -508,7 +536,15 @@ def _capturar_png(
 def _coletar_elementos(
     hwnd: int | None, profundidade: int, so_interativos: bool
 ) -> list[dict[str, Any]]:
-    """Árvore UIA achatada em lista. É a percepção barata — texto, não pixel."""
+    """Árvore UIA achatada em lista, com COM inicializado na thread da chamada."""
+    with _com_na_thread():
+        return _coletar_elementos_raw(hwnd, profundidade, so_interativos)
+
+
+def _coletar_elementos_raw(
+    hwnd: int | None, profundidade: int, so_interativos: bool
+) -> list[dict[str, Any]]:
+    """A varredura em si. É a percepção barata — texto, não pixel."""
     global _ELEMENTOS, _ELEMENTOS_EM
 
     if _uia is None:
@@ -642,17 +678,18 @@ def _campo_de_senha() -> bool | None:
     if _uia is None:
         return None
     try:
-        foco = _uia.GetFocusedControl()
-        if foco is None:
-            return None
-        for atributo in ("IsPassword", "IsPasswordProperty"):
-            valor = getattr(foco, atributo, None)
-            if isinstance(valor, bool):
-                return valor
-        prop = getattr(_uia, "PropertyId", None)
-        pid = getattr(prop, "IsPasswordProperty", None) if prop else None
-        if pid is not None:
-            return bool(foco.GetPropertyValue(pid))
+        with _com_na_thread():
+            foco = _uia.GetFocusedControl()
+            if foco is None:
+                return None
+            for atributo in ("IsPassword", "IsPasswordProperty"):
+                valor = getattr(foco, atributo, None)
+                if isinstance(valor, bool):
+                    return valor
+            prop = getattr(_uia, "PropertyId", None)
+            pid = getattr(prop, "IsPasswordProperty", None) if prop else None
+            if pid is not None:
+                return bool(foco.GetPropertyValue(pid))
     except Exception:  # noqa: BLE001
         return None
     return None
@@ -1120,15 +1157,17 @@ def desktop_preencher_campo(id: str, texto: str, conferir: bool = True) -> Any:
         return _erro(f"UI Automation indisponível ({_ERRO_UIA})")
 
     try:
-        x, y = elemento["centro"]
-        controle = _uia.ControlFromPoint(x, y)
-        if controle is None:
-            return _erro("não encontrei o controle nessa posição; a tela mudou?")
-        if getattr(controle, "IsPassword", False) is True:
-            return _erro(
-                "esse campo é de senha. Recuso escrever nele — peça ao dono para digitar."
-            )
-        controle.GetValuePattern().SetValue(texto)
+        with _com_na_thread():
+            x, y = elemento["centro"]
+            controle = _uia.ControlFromPoint(x, y)
+            if controle is None:
+                return _erro("não encontrei o controle nessa posição; a tela mudou?")
+            if getattr(controle, "IsPassword", False) is True:
+                return _erro(
+                    "esse campo é de senha. Recuso escrever nele — "
+                    "peça ao dono para digitar."
+                )
+            controle.GetValuePattern().SetValue(texto)
     except Exception as exc:  # noqa: BLE001
         return _erro(
             f"o controle não aceita escrita direta ({exc}). "

@@ -204,7 +204,15 @@ class MCPClientManager:
 
         payload: dict[str, Any] = {"result": output.strip()}
         if images:
-            payload["images"] = images
+            # `images_b64` e não `images`: a chave precisa dizer o FORMATO, não o
+            # assunto. `SystemToolExecutor._web_search` já devolvia `images` com
+            # uma lista de URLs de resultado de busca, e o laço do `ChiefAI`, ao
+            # passar a aceitar imagem de tool, mandava essas URLs para o provider
+            # como se fossem base64 — o Gemini respondia HTTP 400 com
+            # "Base64 decoding failed for https://...". Duas coisas diferentes
+            # com o mesmo nome viram uma colisão silenciosa; o nome explícito é
+            # o que impede a próxima.
+            payload["images_b64"] = images
         return payload
 
     async def close_all(self) -> None:

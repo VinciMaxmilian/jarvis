@@ -86,7 +86,7 @@ async def test_call_tool_devolve_a_imagem_em_vez_de_descarta_la() -> None:
 
     resultado = await gerente.call_tool("desktop_capturar_tela", {})
 
-    assert resultado["images"] == [_PNG_FALSO]
+    assert resultado["images_b64"] == [_PNG_FALSO]
     assert resultado["result"] == '{"ok": true}'
 
 
@@ -108,7 +108,7 @@ async def test_imagem_sai_separada_do_texto() -> None:
 async def test_tool_sem_imagem_nao_ganha_a_chave() -> None:
     """Chave `images` vazia faria todo consumidor testar duas coisas."""
     gerente = _gerente_com([SimpleNamespace(type="text", text="ok")])
-    assert "images" not in await gerente.call_tool("desktop_capturar_tela", {})
+    assert "images_b64" not in await gerente.call_tool("desktop_capturar_tela", {})
 
 
 async def test_erro_continua_erro_mesmo_com_imagem_anexada() -> None:
@@ -169,7 +169,7 @@ def _executor_que_fotografa(*capturas: str) -> RecordingToolExecutor:
     return RecordingToolExecutor(
         [make_tool_spec("desktop_capturar_tela"), make_tool_spec("web_search")],
         results={
-            "desktop_capturar_tela": {"result": "capturei", "images": list(capturas)}
+            "desktop_capturar_tela": {"result": "capturei", "images_b64": list(capturas)}
         },
     )
 
@@ -228,7 +228,7 @@ async def test_so_as_ultimas_capturas_seguem_para_o_modelo() -> None:
 
     executor = RecordingToolExecutor(
         [make_tool_spec("desktop_capturar_tela")],
-        results={"desktop_capturar_tela": {"result": "ok", "images": ["A", "B"]}},
+        results={"desktop_capturar_tela": {"result": "ok", "images_b64": ["A", "B"]}},
     )
     chief = ChiefAI(
         llm=llm,
@@ -421,3 +421,59 @@ async def test_discover_pula_pasta_marcada_host_only(tmp_path: Path) -> None:
     await gerente.discover_and_connect()
 
     assert "jarvis_windows_host" not in gerente.servers
+
+
+async def test_urls_do_web_search_nunca_viram_imagem_para_o_provider() -> None:
+    """Regressão de produção: Gemini HTTP 400, "Base64 decoding failed for
+    https://...".
+
+    `SystemToolExecutor._web_search` devolve `images` com uma lista de URLs de
+    resultado de busca. Quando o laço passou a aceitar imagem vinda de tool, ele
+    lia essa chave e mandava as URLs para o canal multimodal como se fossem
+    bytes. Duas coisas diferentes com o mesmo nome — por isso o canal de captura
+    virou `images_b64`, e por isso este teste existe.
+    """
+    llm = _LLMQueRegistraImagens()
+    llm.queue_tool_call("web_search", {"query": "gatinhos"})
+    llm.queue_text("achei estas fotos")
+
+    executor = RecordingToolExecutor(
+        [make_tool_spec("web_search")],
+        results={
+            "web_search": {
+                "answer": "fotos de gatinhos",
+                "images": ["https://exemplo.com/gato.png", "https://x.com/b.jpg"],
+                "results": [],
+            }
+        },
+    )
+    chief = ChiefAI(
+        llm=llm,
+        tools=executor,
+        conversation_store=InMemoryConversationStore(),
+        profile=CHIEF_PROFILE,
+    )
+    await _rodar(chief, "pesquise imagens de gatinhos")
+
+    assert all(i == [] for i in llm.imagens_por_rodada), llm.imagens_por_rodada
+    # E as URLs continuam no TEXTO, que é onde servem: é assim que o modelo as
+    # devolve ao dono em markdown de imagem.
+    conteudo = [m.content for m in llm.received[-1] if m.role == "tool"]
+    assert "exemplo.com/gato.png" in conteudo[0]
+
+
+async def test_captura_base64_sobrevive_ao_filtro_de_url() -> None:
+    """A contraprova: o filtro tira URL, não tira captura."""
+    llm = _LLMQueRegistraImagens()
+    llm.queue_tool_call("desktop_capturar_tela", {})
+    llm.queue_text("vi a tela")
+
+    chief = ChiefAI(
+        llm=llm,
+        tools=_executor_que_fotografa("iVBORw0KGgoAAAA"),
+        conversation_store=InMemoryConversationStore(),
+        profile=CHIEF_PROFILE,
+    )
+    await _rodar(chief)
+
+    assert llm.imagens_por_rodada[1] == ["iVBORw0KGgoAAAA"]
