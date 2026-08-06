@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NeuralMap } from '../components/NeuralMap/NeuralMap'
+import { MemoryLevels } from '../components/MemoryLevels'
 import { getApiBase } from '../config'
 
 /* De quanto em quanto tempo perguntar se a memória mudou. 4s é rápido o
@@ -11,6 +12,10 @@ const INTERVALO_MS = 4000
 export default function MemoryPage() {
   const apiBase = getApiBase()
   const [updating, setUpdating] = useState(false)
+  /* Painel dos cinco níveis. Aberto por padrão: era a ausência dele que fazia a
+   * aba parecer "só um RAG". Fechável porque o grafo ganha 360px quando o dono
+   * quer olhar a topologia inteira. */
+  const [niveisAbertos, setNiveisAbertos] = useState(true)
   /* loadGraph() memoiza por URL, e o NeuralMap só recria o Engine quando a URL
    * muda — o contador é o que força um refetch depois de reindexar. */
   const [versao, setVersao] = useState(0)
@@ -121,17 +126,45 @@ export default function MemoryPage() {
           >
             {updating ? 'ATUALIZANDO EM BACKGROUND...' : 'ATUALIZAR GRAFO'}
           </button>
+
+          <button
+            onClick={() => setNiveisAbertos(v => !v)}
+            style={{
+              background: 'transparent',
+              border: '1px solid hsl(var(--border-dim))',
+              color: 'hsl(var(--neon-cyan))',
+              padding: '4px 12px',
+              fontSize: '10px',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+            }}
+          >
+            {niveisAbertos ? 'OCULTAR NÍVEIS' : 'MOSTRAR 5 NÍVEIS'}
+          </button>
         </div>
 
         <span className="mono" style={{
           color: 'hsl(var(--text-muted))',
           fontSize: 10,
-        }}>LONG TERM STORAGE</span>
+        }}>SHORT · WORKING · LONG · KNOWLEDGE · EXPERIENCE</span>
       </div>
 
-      {/* Mesmo motor da aba Brain, alimentado pelos vetores da memória */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <NeuralMap url={`${apiBase}/api/memory/graph.json?v=${versao}`} />
+      {/* Grafo à esquerda, os cinco níveis à direita.
+       *
+       * O grafo cobre `knowledge` e `long` (é o que tem vetor); `short`,
+       * `working` e `experience` não têm embedding e nunca apareceriam nele.
+       * Daí o painel ao lado, em vez de tentar empurrar os cinco para dentro do
+       * mesmo desenho. */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          <NeuralMap url={`${apiBase}/api/memory/graph.json?v=${versao}`} />
+        </div>
+        {niveisAbertos && (
+          <div style={{ width: 360, flexShrink: 0, minHeight: 0 }}>
+            <MemoryLevels />
+          </div>
+        )}
       </div>
     </div>
   )

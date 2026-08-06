@@ -275,8 +275,8 @@
     "semantic_hash": ""
   },
   "apps/api/deps.py": {
-    "mtime": 1786040480.3790758,
-    "ast_hash": "04b83833ce3c31b6a19dad26542d0e46",
+    "mtime": 1786041279.0746634,
+    "ast_hash": "6f529eae7804e8f250971429393a0417",
     "semantic_hash": ""
   },
   "apps/api/routers/__init__.py": {
@@ -1155,8 +1155,8 @@
     "semantic_hash": ""
   },
   "apps/api/routers/memory.py": {
-    "mtime": 1785927936.7079632,
-    "ast_hash": "c63a65cbfeeb77e163a78dac5c5471ef",
+    "mtime": 1786044449.8796732,
+    "ast_hash": "b7492c4805af5d79c6a468b72eccafef",
     "semantic_hash": ""
   },
   "apps/api/routers/voice.py": {
@@ -1245,8 +1245,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/pages/MemoryPage.tsx": {
-    "mtime": 1785927936.7143927,
-    "ast_hash": "5165368ef864efa024b2fe871bcad5e8",
+    "mtime": 1786044557.397089,
+    "ast_hash": "d088442724fd661d02496d151b9a5d37",
     "semantic_hash": ""
   },
   "capabilities/filesystem/backend/__init__.py": {
@@ -1320,8 +1320,8 @@
     "semantic_hash": ""
   },
   "packages/agents/tools/executor.py": {
-    "mtime": 1786040919.0720103,
-    "ast_hash": "b69f9e105eb6da90367adcaebf345076",
+    "mtime": 1786041255.3305457,
+    "ast_hash": "086435dd469bce3d774a2ba94189260f",
     "semantic_hash": ""
   },
   "packages/kernel/event_bus/redis_bus.py": {
@@ -2525,8 +2525,18 @@
     "semantic_hash": ""
   },
   "tests/unit/test_research_ponta_a_ponta.py": {
-    "mtime": 1786040974.088092,
-    "ast_hash": "18aba3794bd4c3a0753f5e026a663dc3",
+    "mtime": 1786041334.6448934,
+    "ast_hash": "ebeae6687e1a94de85c7b717d0019439",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/MemoryLevels.tsx": {
+    "mtime": 1786044526.8859496,
+    "ast_hash": "82d35e8e57099f1b1df56e125b3d0ce0",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_memory_levels_endpoint.py": {
+    "mtime": 1786044746.3911939,
+    "ast_hash": "588c1e25e4ee34c5cc178d6ad951caa3",
     "semantic_hash": ""
   }
 }

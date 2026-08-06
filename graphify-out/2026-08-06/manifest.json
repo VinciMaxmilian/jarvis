@@ -5,8 +5,8 @@
     "semantic_hash": "c4c4632d18a1e7cf7af2dd8d1908b7a5"
   },
   "orchestrator/main.py": {
-    "mtime": 1785866331.583169,
-    "ast_hash": "e73755803c27bb3830a7d6ebdd803ff6",
+    "mtime": 1786040488.0640647,
+    "ast_hash": "c6ad86ff9754def44a7748dd4ea7e835",
     "semantic_hash": ""
   },
   ".claude/CLAUDE.md": {
@@ -190,7 +190,7 @@
     "semantic_hash": ""
   },
   "pyproject.toml": {
-    "mtime": 1786040057.0316248,
+    "mtime": 1786040393.1439247,
     "ast_hash": "583168b0bb7eb10abecbdf64323ef276",
     "semantic_hash": ""
   },
@@ -275,8 +275,8 @@
     "semantic_hash": ""
   },
   "apps/api/deps.py": {
-    "mtime": 1786040057.0227132,
-    "ast_hash": "25a081b18b559e3420ecad764f061d7a",
+    "mtime": 1786040480.3790758,
+    "ast_hash": "04b83833ce3c31b6a19dad26542d0e46",
     "semantic_hash": ""
   },
   "apps/api/routers/__init__.py": {
@@ -295,8 +295,8 @@
     "semantic_hash": ""
   },
   "packages/agents/chief.py": {
-    "mtime": 1785947094.7306914,
-    "ast_hash": "1aae9f9b9d95e243ccaf0163b86386c5",
+    "mtime": 1786040384.888025,
+    "ast_hash": "efbcd39a5f13b61bf39df33dde6b5fbf",
     "semantic_hash": ""
   },
   "packages/agents/tools/__init__.py": {
@@ -365,7 +365,7 @@
     "semantic_hash": "00ef360993b27ad3de536e9292167f5c"
   },
   "packages/agents/goal_manager.py": {
-    "mtime": 1786040057.0260448,
+    "mtime": 1786040393.1407614,
     "ast_hash": "b081e85a5bc6dd19107fd9fc4c2677a3",
     "semantic_hash": ""
   },
@@ -985,7 +985,7 @@
     "semantic_hash": ""
   },
   "packages/scheduler/config.py": {
-    "mtime": 1786040057.0293665,
+    "mtime": 1786040393.1428738,
     "ast_hash": "7fea2990dfe5dd98e302b7fbe9780a71",
     "semantic_hash": ""
   },
@@ -1000,8 +1000,8 @@
     "semantic_hash": ""
   },
   "packages/scheduler/reindex.py": {
-    "mtime": 1785755327.7123837,
-    "ast_hash": "ad7cc9c106eb33715ddb442f89ec3a27",
+    "mtime": 1786040829.6895072,
+    "ast_hash": "ff75007be7fea34dc4ac56467f8c2ed5",
     "semantic_hash": ""
   },
   "packages/scheduler/runner.py": {
@@ -1320,8 +1320,8 @@
     "semantic_hash": ""
   },
   "packages/agents/tools/executor.py": {
-    "mtime": 1786040057.0293665,
-    "ast_hash": "17a8a8ed642a006dc38e4a5e540f8184",
+    "mtime": 1786040919.0720103,
+    "ast_hash": "b69f9e105eb6da90367adcaebf345076",
     "semantic_hash": ""
   },
   "packages/kernel/event_bus/redis_bus.py": {
@@ -1520,8 +1520,8 @@
     "semantic_hash": ""
   },
   "packages/agents/profiles.py": {
-    "mtime": 1785931745.9925692,
-    "ast_hash": "9d304cdb083bd6d812677159b0a26ba0",
+    "mtime": 1786040460.6200569,
+    "ast_hash": "108890f7d64fd082531ec4e09819539d",
     "semantic_hash": ""
   },
   "packages/agents/tool_guard.py": {
@@ -1570,7 +1570,7 @@
     "semantic_hash": ""
   },
   "packages/agents/prompts/chief.md": {
-    "mtime": 1786040057.0260448,
+    "mtime": 1786040393.14182,
     "ast_hash": "0f7ae4d35c952488390c2742ce74ce84",
     "semantic_hash": ""
   },
@@ -1595,7 +1595,7 @@
     "semantic_hash": ""
   },
   "capabilities/browser/backend/handlers.py": {
-    "mtime": 1786040057.0260448,
+    "mtime": 1786040393.1085906,
     "ast_hash": "2c02883ed9615b950bd8d1c651f79d47",
     "semantic_hash": ""
   },
@@ -2375,37 +2375,37 @@
     "semantic_hash": ""
   },
   "packages/agents/skills.py": {
-    "mtime": 1786040057.0908506,
+    "mtime": 1786040291.802985,
     "ast_hash": "a7bdc7edf1e544325a2872521416b29a",
     "semantic_hash": ""
   },
   "packages/rag/fetcher.py": {
-    "mtime": 1786040057.0908506,
+    "mtime": 1786040291.802985,
     "ast_hash": "1451e6ad453fafabf10be823348538c9",
     "semantic_hash": ""
   },
   "packages/rag/ingest.py": {
-    "mtime": 1786040057.092904,
+    "mtime": 1786040291.802985,
     "ast_hash": "92a9da88b4419ad9b7f63f14a474ffb3",
     "semantic_hash": ""
   },
   "packages/rag/research.py": {
-    "mtime": 1786040057.092904,
+    "mtime": 1786040291.802985,
     "ast_hash": "a4cd00ff450dd667b7ff017fe6af4d62",
     "semantic_hash": ""
   },
   "scripts/pesquisar.py": {
-    "mtime": 1786040057.0953047,
+    "mtime": 1786040291.806779,
     "ast_hash": "5bbbfcdb61d597992b2069baf5a5cbdc",
     "semantic_hash": ""
   },
   "tests/unit/test_rag_ingest.py": {
-    "mtime": 1786040057.0958347,
+    "mtime": 1786040291.8083708,
     "ast_hash": "67e5ec3e2fd28111186e91b724b19a62",
     "semantic_hash": ""
   },
   "tests/unit/test_skills.py": {
-    "mtime": 1786040057.0968857,
+    "mtime": 1786040291.8088987,
     "ast_hash": "1a661fc71e262b730810b457c5e77ea0",
     "semantic_hash": ""
   },
@@ -2425,12 +2425,12 @@
     "semantic_hash": ""
   },
   "data/skills/exemplo/SKILL.md": {
-    "mtime": 1786040057.0908506,
+    "mtime": 1786040291.777706,
     "ast_hash": "77eba387c1575da072faca6a97c4b904",
     "semantic_hash": ""
   },
   "plano-pesquisa-knowledge.md": {
-    "mtime": 1786040057.0947995,
+    "mtime": 1786040291.8062723,
     "ast_hash": "7a17271fc0e7233eaf3014e475a80845",
     "semantic_hash": ""
   },
@@ -2512,6 +2512,21 @@
   "data/desktop_audit/2026-08-05/144223_237_clicar.png": {
     "mtime": 1785951743.2369573,
     "ast_hash": "da8d1eae68ca26b9fdcdcc850ebcf27c",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_rag_fetcher.py": {
+    "mtime": 1786040291.8078394,
+    "ast_hash": "695d3bb59a5f5fe48c526c48b748422b",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_rag_research.py": {
+    "mtime": 1786040579.7421927,
+    "ast_hash": "a270c4ae3a79b8f9c64948be52de8a68",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_research_ponta_a_ponta.py": {
+    "mtime": 1786040974.088092,
+    "ast_hash": "18aba3794bd4c3a0753f5e026a663dc3",
     "semantic_hash": ""
   }
 }
