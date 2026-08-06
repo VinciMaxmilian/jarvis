@@ -79,7 +79,26 @@ async def main() -> None:
             knowledge_index=KnowledgeBaseAdapter(memory),
         )
 
-        gm = GoalManager(goal_store=store, tool_executor=kernel, llm=llm, memory=memory, registry=registry)
+        # A pesquisa web roda AQUI, não na API: são minutos de trabalho por goal.
+        # Se o pipeline não montar (sem chave de busca, sem embedder), o resto do
+        # orchestrator continua de pé — só os goals de pesquisa falham, e falham
+        # dizendo o motivo.
+        research = None
+        try:
+            from apps.api.deps import build_research_pipeline
+
+            research = await build_research_pipeline(session)
+        except Exception as exc:
+            logger.warning("Pesquisa web indisponível: %s", exc)
+
+        gm = GoalManager(
+            goal_store=store,
+            tool_executor=kernel,
+            llm=llm,
+            memory=memory,
+            registry=registry,
+            research_pipeline=research,
+        )
         executive = Executive(goal_manager=gm, goal_store=store)
 
         await bus.start()

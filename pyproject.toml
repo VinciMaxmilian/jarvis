@@ -58,6 +58,11 @@ dependencies = [
                             # fala 2.x — search(max_results=)/add_content_async().
     "pgvector>=0.3.2",      # Para usar PgVector com Agno
     "pypdf>=4.3.0",         # Leitura de PDF no Agno
+    # Extração de texto de HTML em `packages/rag/fetcher.py` e na capability
+    # `browser`. Estava sendo importada sem declaração: funcionava só porque o
+    # Agno a arrasta como transitiva — dependência que some no dia em que o Agno
+    # trocar de parser de HTML, e o caminho de ingestão de conhecimento quebra.
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]

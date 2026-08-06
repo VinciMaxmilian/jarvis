@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import httpx
-from bs4 import BeautifulSoup
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from capabilities.browser.schemas import (
     ExtrairEntrada,
@@ -18,8 +18,33 @@ from packages.capabilities import (
     permissoes_declaradas,
     tool,
 )
+from packages.rag.fetcher import FetcherConfig, fetch_url
 
 DIRETORIO = Path(__file__).resolve().parents[1]
+
+
+def _rodar(corotina: Any) -> Any:
+    """Executa uma corotina a partir de código síncrono.
+
+    O despacho do Capability SDK é síncrono por contrato (`packages/capabilities/
+    base.py`), e o `fetch_url` é async porque o pipeline de pesquisa baixa dezenas
+    de URLs em paralelo — async no módulo compartilhado é o que permite isso, e
+    fazer o inverso (fetcher síncrono + thread pool no pipeline) trocaria uma
+    ponte pequena aqui por uma ponte grande lá.
+
+    O caminho normal é `asyncio.run`: a capability roda em subprocesso próprio,
+    um loop por execução é exatamente o que o SDK descreve. O `ThreadPoolExecutor`
+    cobre o caso de alguém chamar o handler de dentro de um loop já rodando
+    (harness de teste, importação direta pela API) — aí `asyncio.run` levantaria
+    `RuntimeError`, e a corotina precisa de um loop em outra thread.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(corotina)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, corotina).result()
 
 
 class Browser(Capability):
@@ -54,30 +79,36 @@ class Browser(Capability):
         idempotent=True,
     )
     def browser_extract_text(self, entrada: ExtrairEntrada) -> ExtrairSaida:
+        """Delega tudo a `packages.rag.fetcher` — aqui só resta a permissão.
+
+        A regra de extração (poda de `nav`/`footer`/`script`, título, colapso de
+        linhas) morava duplicada neste arquivo. Duas cópias da mesma regra
+        divergem na primeira correção que alguém faz num lado só; o fetcher é a
+        versão canônica, e é a que traz junto as guardas de SSRF, robots.txt,
+        content-type e teto de bytes que esta capability nunca teve.
+
+        `_conferir_host` continua rodando **antes** do fetch, e roda de novo na
+        URL final: como o fetcher segue redirects à mão, um 302 para fora da
+        `network` declarada é visível daqui — e antes não era.
+        """
         self._conferir_host(entrada.url, "browser_extract_text")
-        
-        try:
-            response = httpx.get(
-                entrada.url, 
-                timeout=entrada.timeout, 
-                follow_redirects=True
+
+        config = FetcherConfig(timeout=entrada.timeout)
+        documento = _rodar(fetch_url(entrada.url, config=config))
+
+        if documento is None:
+            # O motivo exato (esquema, IP privado, robots, content-type, teto,
+            # timeout, 404) já saiu em warning estruturado no log do fetcher; o
+            # contrato da tool devolve recusa, não a causa raiz.
+            self._recusar(
+                "browser_extract_text",
+                "url",
+                "falha ao buscar URL: recusada pelas guardas do fetcher ou sem conteúdo legível",
             )
-            response.raise_for_status()
-        except Exception as exc:
-            self._recusar("browser_extract_text", "url", f"falha ao buscar URL: {exc}")
 
-        html = response.text
-        soup = BeautifulSoup(html, "html.parser")
+        self._conferir_host(documento.url, "browser_extract_text")
 
-        # Remover scripts e estilos
-        for script in soup(["script", "style"]):
-            script.extract()
-        
-        texto = soup.get_text(separator="\n")
-        linhas = [linha.strip() for linha in texto.splitlines() if linha.strip()]
-        texto_limpo = "\n".join(linhas)
-
-        return ExtrairSaida(url=entrada.url, texto=texto_limpo)
+        return ExtrairSaida(url=documento.url, texto=documento.texto)
 
 
 def construir() -> Browser:

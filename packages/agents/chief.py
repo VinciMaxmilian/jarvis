@@ -71,6 +71,7 @@ class ChiefAI:
         embed_llm: LLMProvider | None = None,
         profile: AgentProfile | None = None,
         agno_knowledge=None,
+        skill_registry=None,
     ) -> None:
         self._profile = profile or CHIEF_PROFILE
         self._llm = llm
@@ -88,6 +89,26 @@ class ChiefAI:
         self._chat_history_store = chat_history_store
         self._memory_store = memory_vector_store
         self._agno_knowledge = agno_knowledge
+        self._skills = skill_registry
+
+    def _prompt_com_skills(self) -> str:
+        """Resolve `{{SKILLS}}` a cada turno, não na carga do módulo.
+
+        A cada turno porque uma pesquisa concluída grava uma skill nova com a API
+        de pé: resolver uma vez só exigiria restart para o Jarvis saber que
+        aprendeu algo, o que anularia a única parte autônoma do recurso.
+        `load_prompt` memoiza o arquivo, então o custo aqui é um `replace`.
+        """
+        base = self._system_prompt
+        if "{{SKILLS}}" not in base:
+            return base
+        bloco = ""
+        if self._skills is not None:
+            try:
+                bloco = self._skills.render_prompt_block()
+            except Exception as exc:  # registro quebrado não derruba o turno
+                logger.warning("chief.skills.render_falhou", error=str(exc))
+        return base.replace("{{SKILLS}}", bloco)
 
     @property
     def profile(self) -> AgentProfile:
@@ -133,7 +154,7 @@ class ChiefAI:
 
         # Carrega histórico
         # Injeta a identidade atual no system prompt
-        sys_prompt = self._system_prompt
+        sys_prompt = self._prompt_com_skills()
         sys_prompt += f"\n\n[INFO DE CONTEXTO OBRIGATÓRIA]: O usuário atual falando com você nesta sessão é: {current_user_email}."
 
         _t = time.perf_counter()

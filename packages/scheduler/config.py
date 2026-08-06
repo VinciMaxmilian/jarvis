@@ -60,6 +60,11 @@ class SchedulerConfig(BaseSettings):
 
     # --- knowledge --------------------------------------------------------- #
     knowledge_path: str = "./data/knowledge"
+    #: Skills declarativas (`<nome>/SKILL.md`). Mora aqui, e não numa constante
+    #: em `packages/agents/skills.py`, porque a regra de resolução é a mesma do
+    #: `knowledge_path` — relativo ancorado na raiz do repo, nunca no cwd — e o
+    #: pipeline de pesquisa escreve nas duas pastas no mesmo passo.
+    skills_path: str = "./data/skills"
 
     # --- horários (cron, hora local do container) --------------------------- #
     #
@@ -83,6 +88,10 @@ class SchedulerConfig(BaseSettings):
     @property
     def knowledge_dir(self) -> Path:
         return resolve_path(self.knowledge_path)
+
+    @property
+    def skills_dir(self) -> Path:
+        return resolve_path(self.skills_path)
 
 
 __all__ = ["SchedulerConfig", "resolve_path"]

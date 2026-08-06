@@ -7,7 +7,7 @@ engine, provider ou store diretamente.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Collection, Mapping
-from typing import Final, get_args
+from typing import Any, Final, get_args
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ import os
 _CHAT_HISTORY_STORE: VectorStore | None = None
 _MEMORY_VECTOR_STORE: VectorStore | None = None
 _REGISTRY: CapabilityRegistry | None = None
+_SKILL_REGISTRY: Any | None = None
 
 _settings = get_settings()
 if _settings.redis_url:
@@ -56,6 +57,22 @@ def get_chat_history_store() -> VectorStore:
         from packages.memory.factory import vector_backend
         _CHAT_HISTORY_STORE = build_vector_store(backend=vector_backend(), table="chat_history")
     return _CHAT_HISTORY_STORE
+
+def get_skill_registry():
+    """Registro de skills — do processo, não do request.
+
+    Singleton porque o cache dele é invalidado por mtime dos arquivos, não pelo
+    tempo de vida do objeto: recriar por request jogaria fora o parse de YAML a
+    cada mensagem e a divulgação progressiva pagaria justamente o I/O que ela
+    existe para evitar.
+    """
+    global _SKILL_REGISTRY
+    if _SKILL_REGISTRY is None:
+        from packages.agents.skills import SkillRegistry
+
+        _SKILL_REGISTRY = SkillRegistry()
+    return _SKILL_REGISTRY
+
 
 def get_memory_vector_store() -> VectorStore:
     global _MEMORY_VECTOR_STORE
@@ -416,7 +433,65 @@ async def get_tool_executor(session: AsyncSession) -> SystemToolExecutor:
         memory_vector_store=memory_store,
         embed_llm=embed_llm,
         agno_knowledge=agno_knowledge,
+        # `knowledge_research` só ENFILEIRA; quem executa é o orchestrator.
+        goal_store=PgGoalStore(session),
+        skill_registry=get_skill_registry(),
     )
+
+async def build_research_pipeline(session: AsyncSession):
+    """Monta o `ResearchPipeline`.
+
+    A busca web é injetada como o `_web_search` do `SystemToolExecutor` em vez de
+    o pipeline falar com o Tavily direto: chave, timeout e formato de resposta
+    ficam num lugar só, e o teste troca a função por um dublê sem tocar em rede.
+
+    O executor daqui é construído **sem `mcp_manager`**, e não vem de
+    `get_tool_executor`: aquele descobre e conecta todos os servidores MCP (~7s
+    de boot) e os deixa abertos. O pipeline usa exatamente um método deste
+    executor — a busca — e nenhuma tool de MCP. Reusar o executor completo pagava
+    a conexão à toa e, num processo de vida curta como `scripts/pesquisar.py`,
+    despejava um traceback de `anyio` no encerramento porque os `stdio_client`
+    ficavam para o coletor de lixo fechar fora da task que os abriu.
+    """
+    import structlog as _structlog
+
+    from packages.rag.research import ResearchPipeline
+    from packages.scheduler.config import SchedulerConfig
+
+    _log = _structlog.get_logger(__name__)
+    settings = get_settings()
+    llm = await get_llm_provider(session)
+
+    embed_llm = None
+    if settings.gemini_api_key:
+        embed_llm = _build_gemini(settings, "")
+
+    agno_knowledge = None
+    try:
+        from packages.rag.agno_knowledge import get_agno_knowledge
+
+        agno_knowledge = get_agno_knowledge()
+    except Exception as exc:
+        _log.warning("deps.research.agno_knowledge.failed", error=str(exc))
+
+    buscador = SystemToolExecutor(
+        tavily_api_key=settings.tavily_api_key,
+        llm=llm,
+        chat_history_store=get_chat_history_store(),
+        memory_vector_store=get_memory_vector_store(),
+        embed_llm=embed_llm,
+        agno_knowledge=agno_knowledge,
+    )
+
+    return ResearchPipeline(
+        llm=llm,
+        embed_llm=embed_llm or llm,
+        memory_store=get_memory_vector_store(),
+        web_search=buscador._web_search,
+        knowledge_dir=SchedulerConfig().knowledge_dir,
+        agno_knowledge=agno_knowledge,
+    )
+
 
 async def get_chief_ai(
     session: AsyncSession,
@@ -471,6 +546,7 @@ Se o usuário ajustar os filtros de uma imagem no frontend e pedir para salvá-l
         memory_vector_store=get_memory_vector_store(),
         embed_llm=embed_llm,
         agno_knowledge=agno_knowledge,
+        skill_registry=get_skill_registry(),
     )
 
 
@@ -524,4 +600,5 @@ async def get_voice_ai(session: AsyncSession) -> ChiefAI:
         embed_llm=embed_llm,
         profile=VOICE_PROFILE,
         agno_knowledge=agno_knowledge,
+        skill_registry=get_skill_registry(),
     )

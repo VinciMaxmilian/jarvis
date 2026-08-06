@@ -60,6 +60,7 @@ class GoalManager:
         llm: LLMProvider | None = None,
         memory: MemorySystem | None = None,
         registry: CapabilityRegistry | None = None,
+        research_pipeline: Any | None = None,
     ) -> None:
         self._store = goal_store
         self._tools = tool_executor
@@ -68,6 +69,11 @@ class GoalManager:
         # exatamente como antes da fatia de memória.
         self._memory = memory
         self._registry = registry
+        # Pesquisa web tem plano fixo de sete estágios; mandá-la para o
+        # `decompose_goal` faria o LLM inventar um plano pior a cada execução.
+        # Com `None`, um goal de pesquisa falha explicitamente em vez de virar
+        # decomposição genérica silenciosa.
+        self._research = research_pipeline
 
     async def decompose_goal(self, goal: Goal) -> list[Task]:
         """Usa LLM para decompor goal em tasks."""
@@ -235,6 +241,9 @@ class GoalManager:
         if goal.status == GoalStatus.DRAFT:
             await self._store.update_goal_status(goal_id, GoalStatus.ACTIVE)
 
+        if goal.context.get("tipo") == "research":
+            return await self._processar_pesquisa(goal)
+
         # Decompor se não tem tasks
         tasks = await self._store.list_tasks(goal_id)
         if not tasks:
@@ -263,12 +272,74 @@ class GoalManager:
 
         return await self._store.get_goal(goal_id)
 
+    async def _processar_pesquisa(self, goal: Goal) -> Goal | None:
+        """Goal de pesquisa web: plano fixo, sem decomposição por LLM.
+
+        Roda aqui e não numa `Task` por capability porque o pipeline já é a
+        unidade de retomada: ele é idempotente por URL (o cache de fontes) e por
+        conteúdo (o hash do `ingest_document`), então reprocessar um goal
+        interrompido refaz só o que faltou, sem custo de embedding repetido.
+        """
+        if self._research is None:
+            await self._store.update_goal_status(goal.id, GoalStatus.FAILED)
+            logger.error("goal.research.sem_pipeline", goal_id=str(goal.id))
+            return await self._store.get_goal(goal.id)
+
+        contexto = goal.context
+        topico = str(contexto.get("topico") or goal.title)
+
+        try:
+            relatorio = await self._research.run(
+                topico,
+                profundidade=str(contexto.get("profundidade") or "media"),
+                max_fontes=contexto.get("max_fontes"),
+            )
+        except Exception as exc:
+            await self._store.update_goal_status(goal.id, GoalStatus.FAILED)
+            logger.error("goal.research.falhou", goal_id=str(goal.id), erro=str(exc))
+            return await self._store.get_goal(goal.id)
+
+        atualizado = await self._store.get_goal(goal.id)
+        if atualizado is not None:
+            atualizado.context = {
+                **contexto,
+                "relatorio": relatorio.model_dump(mode="json"),
+            }
+            # Nem todo GoalStore expõe update de contexto; o relatório completo é
+            # bônus, o status é o que não pode faltar.
+            atualizar = getattr(self._store, "update_goal", None)
+            if atualizar is not None:
+                try:
+                    await atualizar(atualizado)
+                except Exception as exc:
+                    logger.warning(
+                        "goal.research.contexto_nao_salvo",
+                        goal_id=str(goal.id),
+                        erro=str(exc),
+                    )
+
+        await self._store.update_goal_status(goal.id, GoalStatus.DONE)
+        logger.info(
+            "goal.research.concluida",
+            goal_id=str(goal.id),
+            documentos=len(relatorio.documentos),
+            chunks=relatorio.chunks_totais,
+        )
+        return await self._store.get_goal(goal.id)
+
     async def resume_active_goals(self) -> list[UUID]:
         """Resume após restart: busca goals ACTIVE e retoma processamento."""
         active = await self._store.list_goals(status=GoalStatus.ACTIVE)
         resumed: list[UUID] = []
 
         for goal in active:
+            # Pesquisa não gera Task nenhuma, então a checagem por tasks pendentes
+            # abaixo a deixaria ACTIVE para sempre depois de um restart no meio.
+            if goal.context.get("tipo") == "research":
+                resumed.append(goal.id)
+                logger.info("goal.resumed", goal_id=str(goal.id), tipo="research")
+                continue
+
             tasks = await self._store.list_tasks(goal.id)
             pending = [
                 t

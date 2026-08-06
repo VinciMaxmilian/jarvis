@@ -44,6 +44,27 @@ DEFAULT_PATTERNS: tuple[str, ...] = ("*.md", "*.txt", "*.rst")
 DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 
 
+def _hash_indexado(documento: object) -> str:
+    """Digest de uma linha do índice, sob qualquer um dos dois nomes de campo.
+
+    Existem DOIS `IndexedDocument` no repo e o serviço vê os dois: o de
+    `packages/scheduler/models.py` chama o campo de `sha256` e é o que o
+    `InMemoryKnowledgeIndex` devolve; o de `packages/memory/models.py` chama de
+    `content_hash` e é o que o `KnowledgeBaseAdapter` devolve em produção. Este
+    módulo lia só `content_hash`, então a segunda passada com o índice em memória
+    estourava `AttributeError` — o job morria antes de reconciliar nada, que é o
+    oposto do que "reindexação incremental" promete.
+
+    Unificar os dois modelos é a correção de verdade e mexe em duas camadas;
+    aceitar os dois nomes aqui é o que faz o job funcionar nos dois caminhos hoje.
+    """
+    for campo in ("content_hash", "sha256"):
+        valor = getattr(documento, campo, None)
+        if valor:
+            return str(valor)
+    return ""
+
+
 class ReindexService:
     """Compara o disco com o índice e aplica só a diferença."""
 
@@ -81,7 +102,7 @@ class ReindexService:
             anterior = indexados.get(doc_id)
             if anterior is None:
                 novos.append(documento)
-            elif anterior.content_hash != documento.sha256:
+            elif _hash_indexado(anterior) != documento.sha256:
                 alterados.append(documento)
 
         removidos = sorted(set(indexados) - set(no_disco))

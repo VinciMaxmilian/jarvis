@@ -175,11 +175,19 @@ _DESKTOP_ACAO: Final = frozenset({
 #: `desktop_bloquear_janela` é leitura-para-todos de propósito, apesar de
 #: escrever em disco: ela só APERTA a segurança. Qualquer papel que ouça o dono
 #: dizer "nunca mexa no meu banco" deve poder registrar isso na hora.
+#: `skill_load` é leitura pura: devolve um documento que o próprio Jarvis
+#: escreveu. Negá-la a `planner`/`researcher` só faria esses papéis raciocinarem
+#: sem o que a casa já aprendeu sobre o assunto.
 _LEITURA: Final = frozenset({
-    "web_search", "search_memory", "desktop_bloquear_janela", *_DESKTOP_PERCEPCAO
+    "web_search", "search_memory", "skill_load",
+    "desktop_bloquear_janela", *_DESKTOP_PERCEPCAO
 })
+#: `knowledge_research` escreve dezenas de arquivos e gasta API paga;
+#: `skill_synthesize` reescreve um documento que entra no prompt de todo turno.
+#: Ambas são ação, e `reviewer` não age.
 _ACAO: Final = frozenset({
-    "criar_servidor_mcp", "knowledge_save", "knowledge_forget", *_DESKTOP_ACAO
+    "criar_servidor_mcp", "knowledge_save", "knowledge_forget",
+    "knowledge_research", "skill_synthesize", *_DESKTOP_ACAO
 })
 
 
